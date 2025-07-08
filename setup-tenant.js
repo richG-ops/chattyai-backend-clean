@@ -34,8 +34,11 @@ async function setupTenant() {
     console.log('🔑 Your JWT Token:');
     console.log(jwtToken);
     console.log('');
-    console.log('📋 Test your API with:');
-    console.log(`curl -H "Authorization: Bearer ${jwtToken}" https://chattyai-calendar-bot-1.onrender.com/get-availability`);
+    console.log('📋 Save this token! You need it for API calls.');
+    console.log('');
+    console.log('Test with PowerShell:');
+    console.log(`$headers = @{Authorization = "Bearer ${jwtToken}"}`);
+    console.log('Invoke-RestMethod -Uri "https://chattyai-calendar-bot-1.onrender.com/get-availability" -Headers $headers');
     
     await knex.destroy();
   } catch (error) {
