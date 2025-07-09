@@ -39,7 +39,7 @@ app.use(cors({
       'http://localhost:3000',
       'http://localhost:4000',
       'https://app.thechattyai.com',
-      'https://chattyai-calendar-bot-1.onrender.com'
+      'https://chattyai-backend-clean.onrender.com'
     ];
     
     // Allow requests with no origin (like mobile apps or curl)
@@ -175,7 +175,7 @@ app.get('/auth', authLimiter, (req, res) => {
     
     // Create a new OAuth2 client with the correct redirect URI based on environment
     const redirectUri = process.env.NODE_ENV === 'production' 
-      ? 'https://chattyai-calendar-bot-1.onrender.com/auth/google/callback'
+      ? 'https://chattyai-backend-clean.onrender.com/auth/google/callback'
       : 'http://localhost:4000/auth/google/callback';
     
     console.log(`🔐 OAuth Request - Redirect URI: ${redirectUri}`);
@@ -250,7 +250,7 @@ app.get('/auth/google/callback', authLimiter, async (req, res) => {
     
     // Create a new OAuth2 client with the correct redirect URI for the callback
     const redirectUri = process.env.NODE_ENV === 'production' 
-      ? 'https://chattyai-calendar-bot-1.onrender.com/auth/google/callback'
+      ? 'https://chattyai-backend-clean.onrender.com/auth/google/callback'
       : 'http://localhost:4000/auth/google/callback';
     
     console.log(`🔐 OAuth Callback - Using redirect URI: ${redirectUri}`);
