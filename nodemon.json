@@ -1,0 +1,7 @@
+{
+  "ignore": [
+    "token.json",
+    "*.log"
+  ],
+  "ext": "js,json"
+} 
