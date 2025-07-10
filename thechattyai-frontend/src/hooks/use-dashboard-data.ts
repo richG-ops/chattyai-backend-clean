@@ -82,6 +82,8 @@ export function useDashboardData() {
       const connectionData = await connectionTest.json()
       console.log('✅ Backend connection successful:', connectionData)
 
+      const token = typeof window !== 'undefined' ? (localStorage.getItem('setup_token') || localStorage.getItem('auth_token') || '') : ''
+
       // Fetch real metrics from backend
       let metrics: MetricData
       try {
@@ -89,7 +91,7 @@ export function useDashboardData() {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${process.env.NEXT_PUBLIC_JWT_TOKEN || ''}`
+            ...(token && { 'Authorization': `Bearer ${token}` })
           },
         })
         
@@ -113,7 +115,7 @@ export function useDashboardData() {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${process.env.NEXT_PUBLIC_JWT_TOKEN || ''}`
+            'Authorization': `Bearer ${token}`
           },
         })
         

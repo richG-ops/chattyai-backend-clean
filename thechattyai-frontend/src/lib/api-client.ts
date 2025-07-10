@@ -206,10 +206,11 @@ export class CalendarApiClient extends ApiClient {
     // Use production backend URL for production, localhost for development
     const baseUrl = process.env.NEXT_PUBLIC_API_URL || 
                    (process.env.NODE_ENV === 'production' 
-                     ? 'https://chattyai-calendar-bot-1.onrender.com' 
+                     ? 'https://chattyai-backend-clean.onrender.com' 
                      : 'http://localhost:4000')
     
     const token = jwtToken || 
+                 (typeof window !== 'undefined' ? (localStorage.getItem('setup_token') || localStorage.getItem('auth_token') || '') : '') ||
                  process.env.NEXT_PUBLIC_JWT_TOKEN || 
                  process.env.CALENDAR_API_JWT_TOKEN ||
                  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcGlfa2V5IjoiMDFiYTE2OGRkMzBjMDM3N2MxZjBjNzRiOTM2ZjQyNzQiLCJjbGllbnRfaWQiOiJkZW1vLWNsaWVudCIsImJ1c2luZXNzX25hbWUiOiJEZW1vIEJ1c2luZXNzIiwiZW1haWwiOiJkZW1vQGJ1c2luZXNzLmNvbSIsImlhdCI6MTc1MjA4NzcwNCwiZXhwIjoxNzgzNjQ1MzA0fQ.xYj4zB62N0vuKwyv_nfdMsewPTR3OFXKke2kcmOxywI'
@@ -371,4 +372,5 @@ export const calendarApi = new CalendarApiClient()
 export const clientApi = new ClientApiClient()
 
 // Export classes for custom instances
-export { ApiClient, ApiError } 
+export { ApiClient }
+export type { ApiError } 

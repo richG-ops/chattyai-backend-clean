@@ -1,37 +1,20 @@
 'use client'
 
 import { useState } from 'react'
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
-import { Progress } from "@/components/ui/progress"
-import { CheckCircle, Building, Calendar, Settings, Phone, Mail, MapPin } from 'lucide-react'
-import Link from 'next/link'
-
-interface FormData {
-  businessName: string
-  businessType: string
-  ownerName: string
-  email: string
-  phone: string
-  address: string
-  description: string
-  services: string[]
-  workingHours: {
-    start: string
-    end: string
-  }
-  timeZone: string
-}
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
+import { Progress } from '@/components/ui/progress'
+import { Phone, CheckCircle, Sparkles, ArrowRight, Building, User } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 
 export default function OnboardingPage() {
   const [currentStep, setCurrentStep] = useState(1)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [formData, setFormData] = useState<FormData>({
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [formData, setFormData] = useState({
     businessName: '',
     businessType: '',
     ownerName: '',
@@ -39,18 +22,14 @@ export default function OnboardingPage() {
     phone: '',
     address: '',
     description: '',
-    services: [],
-    workingHours: {
-      start: '09:00',
-      end: '17:00'
-    },
-    timeZone: 'America/Los_Angeles'
+    timeZone: 'America/New_York'
   })
+  const router = useRouter()
 
   const totalSteps = 3
-  const progress = (currentStep / totalSteps) * 100
+  const progressPercent = (currentStep / totalSteps) * 100
 
-  const handleInputChange = (field: keyof FormData, value: any) => {
+  const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -60,20 +39,16 @@ export default function OnboardingPage() {
   const handleNext = () => {
     if (currentStep < totalSteps) {
       setCurrentStep(currentStep + 1)
-    }
-  }
-
-  const handlePrevious = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1)
+    } else {
+      handleSubmit()
     }
   }
 
   const handleSubmit = async () => {
-    setLoading(true)
-    setError('')
-
+    setIsSubmitting(true)
+    
     try {
+      // Call the backend API to create the tenant
       const response = await fetch('/api/clients/create', {
         method: 'POST',
         headers: {
@@ -82,351 +57,352 @@ export default function OnboardingPage() {
         body: JSON.stringify(formData),
       })
 
-      const data = await response.json()
-
-      if (data.success) {
-        // Store the JWT token for later use
-        localStorage.setItem('setup_token', data.jwtToken)
-        localStorage.setItem('client_data', JSON.stringify(data.client))
-        
-        // Redirect to setup complete page
-        window.location.href = '/setup-complete'
-      } else {
-        setError(data.error || 'Failed to create account')
+      if (!response.ok) {
+        throw new Error('Failed to create tenant')
       }
-    } catch (err) {
-      setError('Network error. Please try again.')
+
+      const result = await response.json()
+      
+      // Store the JWT token in localStorage
+      if (result.jwt_token) {
+        localStorage.setItem('setup_token', result.jwt_token)
+        localStorage.setItem('client_id', result.client_id)
+        localStorage.setItem('business_name', formData.businessName)
+      }
+
+      // Redirect to success page
+      router.push('/setup-complete')
+    } catch (error) {
+      console.error('Setup failed:', error)
+      // Handle error (show toast, etc.)
     } finally {
-      setLoading(false)
+      setIsSubmitting(false)
     }
   }
 
+  const isStepValid = () => {
+    switch (currentStep) {
+      case 1:
+        return formData.businessName && formData.businessType && formData.ownerName
+      case 2:
+        return formData.email && formData.phone
+      case 3:
+        return formData.address && formData.timeZone
+      default:
+        return false
+    }
+  }
+
+  const businessTypes = [
+    'Healthcare',
+    'Beauty & Wellness',
+    'Fitness & Sports',
+    'Professional Services',
+    'Education',
+    'Real Estate',
+    'Legal Services',
+    'Financial Services',
+    'Home Services',
+    'Automotive',
+    'Other'
+  ]
+
+  const timeZones = [
+    'America/New_York',
+    'America/Chicago',
+    'America/Denver',
+    'America/Los_Angeles',
+    'America/Toronto',
+    'Europe/London',
+    'Europe/Paris',
+    'Asia/Tokyo',
+    'Australia/Sydney'
+  ]
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 py-12">
-      <div className="container mx-auto px-4">
-        {/* Header */}
-        <div className="max-w-2xl mx-auto text-center mb-8">
-          <Link href="/" className="inline-flex items-center text-blue-600 hover:text-blue-800 mb-6">
-            <Phone className="w-5 h-5 mr-2" />
-            <span className="text-lg font-semibold">TheChattyAI</span>
-          </Link>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Let's set up your AI assistant
-          </h1>
-          <p className="text-gray-600">
-            This will only take a few minutes to get you started
-          </p>
-        </div>
-
-        {/* Progress Bar */}
-        <div className="max-w-2xl mx-auto mb-8">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-700">
-              Step {currentStep} of {totalSteps}
-            </span>
-            <span className="text-sm font-medium text-gray-700">
-              {Math.round(progress)}% Complete
-            </span>
-          </div>
-          <Progress value={progress} className="h-2" />
-        </div>
-
-        {/* Form Card */}
-        <Card className="max-w-2xl mx-auto shadow-xl border-0">
-          <CardHeader className="text-center">
-            <div className="flex justify-center mb-4">
-              {currentStep === 1 && (
-                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                  <Building className="w-6 h-6 text-blue-600" />
-                </div>
-              )}
-              {currentStep === 2 && (
-                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                  <Calendar className="w-6 h-6 text-green-600" />
-                </div>
-              )}
-              {currentStep === 3 && (
-                <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
-                  <Settings className="w-6 h-6 text-purple-600" />
-                </div>
-              )}
+    <div className="min-h-screen bg-hero-gradient scroll-smooth">
+      {/* Navigation */}
+      <nav className="container mx-auto px-4 py-6 relative z-10">
+        <div className="flex items-center justify-between animate-slideInLeft">
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center border border-white/30">
+              <Phone className="w-4 h-4 text-white" />
             </div>
-            <CardTitle className="text-2xl">
-              {currentStep === 1 && "Business Information"}
-              {currentStep === 2 && "Services & Hours"}
-              {currentStep === 3 && "Final Setup"}
-            </CardTitle>
-            <CardDescription>
-              {currentStep === 1 && "Tell us about your business"}
-              {currentStep === 2 && "Configure your services and availability"}
-              {currentStep === 3 && "Review and complete setup"}
-            </CardDescription>
-          </CardHeader>
+            <span className="text-xl font-bold text-white">TheChattyAI</span>
+          </div>
+          <div className="flex items-center space-x-2 text-white">
+            <Sparkles className="w-4 h-4" />
+            <span className="text-sm">Setting up your AI agent</span>
+          </div>
+        </div>
+      </nav>
 
-          <CardContent className="space-y-6">
-            {/* Error Message */}
-            {error && (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-sm text-red-600">{error}</p>
+      {/* Main Content */}
+      <div className="container mx-auto px-4 py-12 relative z-10">
+        <div className="max-w-2xl mx-auto">
+          {/* Progress Header */}
+          <div className="text-center mb-12 animate-fadeInUp">
+            <h1 className="text-4xl lg:text-5xl font-bold text-white mb-4">
+              Welcome to <span className="bg-gradient-to-r from-yellow-300 via-pink-300 to-purple-300 bg-clip-text text-transparent">TheChattyAI</span>
+            </h1>
+            <p className="text-xl text-blue-100 mb-6">
+              Let's get your AI voice agent set up in just a few minutes
+            </p>
+            
+            <div className="flex items-center justify-center space-x-4 mb-6">
+              <div className="flex items-center space-x-2">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  currentStep >= 1 ? 'bg-white text-blue-600' : 'bg-white/20 text-white'
+                }`}>
+                  {currentStep > 1 ? <CheckCircle className="w-4 h-4" /> : '1'}
+                </div>
+                <span className="text-white text-sm">Business Info</span>
               </div>
-            )}
+              <div className="w-8 h-0.5 bg-white/30"></div>
+              <div className="flex items-center space-x-2">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  currentStep >= 2 ? 'bg-white text-blue-600' : 'bg-white/20 text-white'
+                }`}>
+                  {currentStep > 2 ? <CheckCircle className="w-4 h-4" /> : '2'}
+                </div>
+                <span className="text-white text-sm">Contact Details</span>
+              </div>
+              <div className="w-8 h-0.5 bg-white/30"></div>
+              <div className="flex items-center space-x-2">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  currentStep >= 3 ? 'bg-white text-blue-600' : 'bg-white/20 text-white'
+                }`}>
+                  {currentStep > 3 ? <CheckCircle className="w-4 h-4" /> : '3'}
+                </div>
+                <span className="text-white text-sm">Setup Complete</span>
+              </div>
+            </div>
+            
+            <Progress value={progressPercent} className="w-full max-w-md mx-auto bg-white/20" />
+          </div>
 
-            {/* Step 1: Business Information */}
-            {currentStep === 1 && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="businessName">Business Name *</Label>
+          {/* Form Card */}
+          <Card className="border-0 shadow-2xl bg-white/95 backdrop-blur-sm card-hover animate-fadeInUp">
+            <CardHeader className="text-center">
+              <CardTitle className="text-2xl text-gray-800">
+                {currentStep === 1 && (
+                  <div className="flex items-center justify-center space-x-2">
+                    <Building className="w-6 h-6 text-blue-600" />
+                    <span>Tell us about your business</span>
+                  </div>
+                )}
+                {currentStep === 2 && (
+                  <div className="flex items-center justify-center space-x-2">
+                    <User className="w-6 h-6 text-blue-600" />
+                    <span>Your contact information</span>
+                  </div>
+                )}
+                {currentStep === 3 && (
+                  <div className="flex items-center justify-center space-x-2">
+                    <CheckCircle className="w-6 h-6 text-green-600" />
+                    <span>Final setup details</span>
+                  </div>
+                )}
+              </CardTitle>
+            </CardHeader>
+            
+            <CardContent className="space-y-6">
+              {/* Step 1: Business Information */}
+              {currentStep === 1 && (
+                <div className="space-y-4 animate-slideInLeft">
+                  <div>
+                    <Label htmlFor="businessName" className="text-sm font-medium text-gray-700">
+                      Business Name *
+                    </Label>
                     <Input
                       id="businessName"
-                      placeholder="e.g., Glamour Hair Studio"
+                      placeholder="e.g., Sarah's Hair Salon"
                       value={formData.businessName}
                       onChange={(e) => handleInputChange('businessName', e.target.value)}
-                      className="h-12"
+                      className="mt-1 focus-premium"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="businessType">Business Type *</Label>
+                  
+                  <div>
+                    <Label htmlFor="businessType" className="text-sm font-medium text-gray-700">
+                      Business Type *
+                    </Label>
                     <Select onValueChange={(value) => handleInputChange('businessType', value)}>
-                      <SelectTrigger className="h-12">
-                        <SelectValue placeholder="Select type" />
+                      <SelectTrigger className="mt-1 focus-premium">
+                        <SelectValue placeholder="Select your business type" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="salon">Hair Salon</SelectItem>
-                        <SelectItem value="medical">Medical Office</SelectItem>
-                        <SelectItem value="fitness">Fitness Studio</SelectItem>
-                        <SelectItem value="dental">Dental Practice</SelectItem>
-                        <SelectItem value="spa">Spa & Wellness</SelectItem>
-                        <SelectItem value="restaurant">Restaurant</SelectItem>
-                        <SelectItem value="consulting">Consulting</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
+                        {businessTypes.map((type) => (
+                          <SelectItem key={type} value={type}>
+                            {type}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="ownerName">Owner Name *</Label>
+                  
+                  <div>
+                    <Label htmlFor="ownerName" className="text-sm font-medium text-gray-700">
+                      Owner Name *
+                    </Label>
                     <Input
                       id="ownerName"
                       placeholder="Your full name"
                       value={formData.ownerName}
                       onChange={(e) => handleInputChange('ownerName', e.target.value)}
-                      className="h-12"
+                      className="mt-1 focus-premium"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email *</Label>
+                  
+                  <div>
+                    <Label htmlFor="description" className="text-sm font-medium text-gray-700">
+                      Business Description
+                    </Label>
+                    <Textarea
+                      id="description"
+                      placeholder="Brief description of your services..."
+                      value={formData.description}
+                      onChange={(e) => handleInputChange('description', e.target.value)}
+                      className="mt-1 focus-premium"
+                      rows={3}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Step 2: Contact Information */}
+              {currentStep === 2 && (
+                <div className="space-y-4 animate-slideInLeft">
+                  <div>
+                    <Label htmlFor="email" className="text-sm font-medium text-gray-700">
+                      Email Address *
+                    </Label>
                     <Input
                       id="email"
                       type="email"
                       placeholder="your@email.com"
                       value={formData.email}
                       onChange={(e) => handleInputChange('email', e.target.value)}
-                      className="h-12"
+                      className="mt-1 focus-premium"
                     />
                   </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone Number *</Label>
+                  
+                  <div>
+                    <Label htmlFor="phone" className="text-sm font-medium text-gray-700">
+                      Phone Number *
+                    </Label>
                     <Input
                       id="phone"
                       type="tel"
                       placeholder="(555) 123-4567"
                       value={formData.phone}
                       onChange={(e) => handleInputChange('phone', e.target.value)}
-                      className="h-12"
+                      className="mt-1 focus-premium"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="address">Business Address</Label>
-                    <Input
+                  
+                  <div>
+                    <Label htmlFor="address" className="text-sm font-medium text-gray-700">
+                      Business Address
+                    </Label>
+                    <Textarea
                       id="address"
-                      placeholder="123 Main St, City, State"
+                      placeholder="123 Main St, City, State 12345"
                       value={formData.address}
                       onChange={(e) => handleInputChange('address', e.target.value)}
-                      className="h-12"
+                      className="mt-1 focus-premium"
+                      rows={2}
                     />
                   </div>
                 </div>
+              )}
 
-                <div className="space-y-2">
-                  <Label htmlFor="description">Business Description</Label>
-                  <Textarea
-                    id="description"
-                    placeholder="Tell us about your business and what makes it special..."
-                    value={formData.description}
-                    onChange={(e) => handleInputChange('description', e.target.value)}
-                    rows={4}
-                  />
+              {/* Step 3: Final Setup */}
+              {currentStep === 3 && (
+                <div className="space-y-4 animate-slideInLeft">
+                  <div>
+                    <Label htmlFor="timeZone" className="text-sm font-medium text-gray-700">
+                      Time Zone *
+                    </Label>
+                    <Select 
+                      value={formData.timeZone} 
+                      onValueChange={(value) => handleInputChange('timeZone', value)}
+                    >
+                      <SelectTrigger className="mt-1 focus-premium">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {timeZones.map((tz) => (
+                          <SelectItem key={tz} value={tz}>
+                            {tz.replace('_', ' ')}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <h4 className="font-semibold text-blue-900 mb-2">What happens next?</h4>
+                    <ul className="text-sm text-blue-800 space-y-1">
+                      <li>• Your AI agent will be configured with your business information</li>
+                      <li>• You'll get access to your personalized dashboard</li>
+                      <li>• You'll receive setup instructions for phone integration</li>
+                      <li>• Our team will help you configure your AI voice agent</li>
+                    </ul>
+                  </div>
                 </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex justify-between pt-6">
+                <Button
+                  variant="outline"
+                  onClick={() => setCurrentStep(currentStep - 1)}
+                  disabled={currentStep === 1}
+                  className="btn-premium"
+                >
+                  Back
+                </Button>
+                
+                <Button
+                  onClick={handleNext}
+                  disabled={!isStepValid() || isSubmitting}
+                  className="btn-premium bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:shadow-2xl"
+                >
+                  {isSubmitting ? (
+                    <div className="flex items-center space-x-2">
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <span>Creating...</span>
+                    </div>
+                  ) : (
+                    <>
+                      {currentStep === totalSteps ? 'Complete Setup' : 'Next'}
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </>
+                  )}
+                </Button>
               </div>
-            )}
+            </CardContent>
+          </Card>
 
-            {/* Step 2: Services & Hours */}
-            {currentStep === 2 && (
-              <div className="space-y-6">
-                <div className="space-y-4">
-                  <Label className="text-lg font-semibold">Business Hours</Label>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="startTime">Opening Time</Label>
-                      <Input
-                        id="startTime"
-                        type="time"
-                        value={formData.workingHours.start}
-                        onChange={(e) => handleInputChange('workingHours', {
-                          ...formData.workingHours,
-                          start: e.target.value
-                        })}
-                        className="h-12"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="endTime">Closing Time</Label>
-                      <Input
-                        id="endTime"
-                        type="time"
-                        value={formData.workingHours.end}
-                        onChange={(e) => handleInputChange('workingHours', {
-                          ...formData.workingHours,
-                          end: e.target.value
-                        })}
-                        className="h-12"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <Label className="text-lg font-semibold">Time Zone</Label>
-                  <Select onValueChange={(value) => handleInputChange('timeZone', value)}>
-                    <SelectTrigger className="h-12">
-                      <SelectValue placeholder="Select your time zone" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="America/Los_Angeles">Pacific Time (PT)</SelectItem>
-                      <SelectItem value="America/Denver">Mountain Time (MT)</SelectItem>
-                      <SelectItem value="America/Chicago">Central Time (CT)</SelectItem>
-                      <SelectItem value="America/New_York">Eastern Time (ET)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-4">
-                  <Label className="text-lg font-semibold">Common Services</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {['Consultation', 'Haircut', 'Styling', 'Coloring', 'Massage', 'Facial', 'Manicure', 'Pedicure'].map((service) => (
-                      <label key={service} className="flex items-center space-x-2 p-3 rounded-lg border hover:bg-gray-50 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          className="rounded border-gray-300"
-                          onChange={(e) => {
-                            const services = e.target.checked
-                              ? [...formData.services, service]
-                              : formData.services.filter(s => s !== service)
-                            handleInputChange('services', services)
-                          }}
-                        />
-                        <span className="text-sm">{service}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
+          {/* Trust Indicators */}
+          <div className="mt-8 text-center animate-fadeInUp">
+            <div className="flex items-center justify-center space-x-8 text-sm text-blue-100">
+              <div className="flex items-center">
+                <CheckCircle className="w-4 h-4 text-green-300 mr-2" />
+                SSL Encrypted
               </div>
-            )}
-
-            {/* Step 3: Final Setup */}
-            {currentStep === 3 && (
-              <div className="space-y-6">
-                <div className="text-center">
-                  <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold mb-2">Almost Done!</h3>
-                  <p className="text-gray-600">
-                    Review your information and we'll set up your AI assistant
-                  </p>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="p-4 bg-gray-50 rounded-lg">
-                    <h4 className="font-semibold mb-2">Business Information</h4>
-                    <div className="text-sm text-gray-600 space-y-1">
-                      <p><strong>Name:</strong> {formData.businessName}</p>
-                      <p><strong>Type:</strong> {formData.businessType}</p>
-                      <p><strong>Owner:</strong> {formData.ownerName}</p>
-                      <p><strong>Email:</strong> {formData.email}</p>
-                      <p><strong>Phone:</strong> {formData.phone}</p>
-                    </div>
-                  </div>
-
-                  <div className="p-4 bg-gray-50 rounded-lg">
-                    <h4 className="font-semibold mb-2">Hours & Services</h4>
-                    <div className="text-sm text-gray-600 space-y-1">
-                      <p><strong>Hours:</strong> {formData.workingHours.start} - {formData.workingHours.end}</p>
-                      <p><strong>Time Zone:</strong> {formData.timeZone}</p>
-                      <p><strong>Services:</strong> {formData.services.join(', ') || 'None selected'}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-4 bg-blue-50 rounded-lg">
-                  <h4 className="font-semibold text-blue-900 mb-2">What Happens Next</h4>
-                  <ul className="text-sm text-blue-800 space-y-1">
-                    <li>• Your AI assistant will be configured within 30 minutes</li>
-                    <li>• You'll receive a dedicated phone number</li>
-                    <li>• Calendar integration will be set up</li>
-                    <li>• You'll get email instructions for next steps</li>
-                  </ul>
-                </div>
+              <div className="flex items-center">
+                <CheckCircle className="w-4 h-4 text-green-300 mr-2" />
+                GDPR Compliant
               </div>
-            )}
-          </CardContent>
-
-          {/* Navigation */}
-          <div className="flex justify-between items-center p-6 border-t">
-            <Button
-              variant="outline"
-              onClick={handlePrevious}
-              disabled={currentStep === 1}
-            >
-              Previous
-            </Button>
-            
-            <div className="flex space-x-2">
-              {[1, 2, 3].map((step) => (
-                <div
-                  key={step}
-                  className={`w-2 h-2 rounded-full ${
-                    step <= currentStep ? 'bg-blue-600' : 'bg-gray-300'
-                  }`}
-                />
-              ))}
+              <div className="flex items-center">
+                <CheckCircle className="w-4 h-4 text-green-300 mr-2" />
+                24/7 Support
+              </div>
             </div>
-
-            {currentStep < totalSteps ? (
-              <Button
-                onClick={handleNext}
-                disabled={
-                  (currentStep === 1 && (!formData.businessName || !formData.businessType || !formData.ownerName || !formData.email || !formData.phone)) ||
-                  (currentStep === 2 && (!formData.workingHours.start || !formData.workingHours.end))
-                }
-              >
-                Continue
-              </Button>
-            ) : (
-              <Button 
-                onClick={handleSubmit} 
-                className="bg-green-600 hover:bg-green-700"
-                disabled={loading}
-              >
-                {loading ? 'Creating Account...' : 'Complete Setup'}
-              </Button>
-            )}
           </div>
-        </Card>
+        </div>
       </div>
     </div>
   )

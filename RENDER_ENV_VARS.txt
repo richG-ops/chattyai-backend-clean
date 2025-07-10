@@ -1,0 +1,17 @@
+# Copy these environment variables to Render
+
+# 1. GOOGLE_CREDENTIALS (paste your actual credentials JSON)
+GOOGLE_CREDENTIALS={"web":{"client_id":"YOUR_CLIENT_ID","client_secret":"YOUR_CLIENT_SECRET","project_id":"YOUR_PROJECT","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","redirect_uris":["http://localhost:4000/auth/google/callback","https://YOUR-APP.onrender.com/auth/google/callback"]}}
+
+# 2. GOOGLE_TOKEN (paste your actual token JSON)
+GOOGLE_TOKEN={"access_token":"YOUR_ACCESS_TOKEN","refresh_token":"YOUR_REFRESH_TOKEN","scope":"https://www.googleapis.com/auth/calendar","token_type":"Bearer","expiry_date":1234567890}
+
+# 3. JWT_SECRET (use your existing secret or generate new one)
+JWT_SECRET=your-super-secret-jwt-key-minimum-256-bits
+
+# 4. DATABASE_URL (if you have PostgreSQL setup)
+DATABASE_URL=postgresql://user:password@host:5432/dbname
+
+# 5. Production settings
+NODE_ENV=production
+PORT=4000 

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import jwt from 'jsonwebtoken'
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,51 +17,42 @@ export async function POST(request: NextRequest) {
 
     // Create client in your existing backend
     const backendUrl = process.env.CALENDAR_API_URL || 'http://localhost:4000'
-    
-    // Generate JWT token for the new client
-    const jwtSecret = process.env.JWT_SECRET || 'your-secret-key'
-    const apiKey = generateApiKey()
-    
-    const token = jwt.sign(
-      { api_key: apiKey, client_id: generateClientId() },
-      jwtSecret,
-      { expiresIn: '365d' }
-    )
 
-    // Store client data (you would save this to your database)
-    const newClient = {
-      id: generateClientId(),
-      businessName: clientData.businessName,
-      businessType: clientData.businessType,
-      ownerName: clientData.ownerName,
-      email: clientData.email,
-      phone: clientData.phone,
-      address: clientData.address,
-      description: clientData.description,
-      services: clientData.services || [],
-      workingHours: clientData.workingHours || { start: '09:00', end: '17:00' },
-      timeZone: clientData.timeZone || 'America/Los_Angeles',
-      apiKey,
-      jwtToken: token,
-      createdAt: new Date().toISOString(),
-      status: 'setup_pending'
+    // Call backend endpoint to create tenant & get JWT
+    const setupRes = await fetch(`${backendUrl}/setup-tenant-once`, {
+      method: 'GET'
+    })
+
+    if (!setupRes.ok) {
+      const text = await setupRes.text()
+      console.error('Backend setup error:', text)
+      return NextResponse.json({ error: 'Backend setup failed' }, { status: 500 })
     }
 
-    // Send notification email to admin (you)
-    await sendNotificationEmail(newClient)
+    const setupData = await setupRes.json()
+
+    // Expected response shape: { jwt_token, message }
+    const { jwt_token: token } = setupData
+
+    // Simple notification log
+    console.log('🔔 NEW CLIENT SIGNUP (backend):', {
+      business: clientData.businessName,
+      owner: clientData.ownerName,
+      email: clientData.email,
+      tokenPreview: token?.substring(0, 20) + '...'
+    })
 
     return NextResponse.json({
       success: true,
       client: {
-        id: newClient.id,
-        businessName: newClient.businessName,
-        email: newClient.email,
-        status: newClient.status
+        businessName: clientData.businessName,
+        email: clientData.email,
+        status: 'setup_pending'
       },
       jwtToken: token,
       message: 'Client created successfully! Setup will be completed within 30 minutes.'
     })
-
+     
   } catch (error) {
     console.error('Error creating client:', error)
     return NextResponse.json(

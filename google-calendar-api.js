@@ -936,6 +936,257 @@ app.get('/api/test/metrics', (req, res) => {
   res.json({ success: true, metrics: mockMetrics });
 });
 
+// Vapi.ai webhook endpoint for voice calls
+app.post('/vapi-webhook', authMiddleware, async (req, res) => {
+  try {
+    const { function: functionName, parameters } = req.body;
+    
+    console.log('🎙️ Vapi webhook called:', { functionName, parameters });
+    
+    switch (functionName) {
+      case 'checkAvailability':
+        const availabilityResult = await handleCheckAvailability(parameters);
+        res.json(availabilityResult);
+        break;
+        
+      case 'bookAppointment':
+        const bookingResult = await handleBookAppointment(parameters);
+        res.json(bookingResult);
+        break;
+        
+      case 'getBusinessHours':
+        const businessHours = await handleGetBusinessHours();
+        res.json(businessHours);
+        break;
+        
+      default:
+        res.json({
+          response: "I didn't understand that request. Could you please try again?"
+        });
+    }
+  } catch (error) {
+    console.error('❌ Vapi webhook error:', error);
+    res.json({
+      response: "I'm having technical difficulties. Please try again in a moment or call us directly."
+    });
+  }
+});
+
+// Vapi helper functions
+async function handleCheckAvailability(params) {
+  try {
+    const { date, timePreference, count = 3 } = params;
+    
+    // Get available slots from existing endpoint
+    const availableSlots = await getAvailableSlots(date, timePreference);
+    
+    if (availableSlots.length === 0) {
+      return {
+        response: "I'm sorry, but I don't see any available appointments for that time. Would you like me to check another day?"
+      };
+    }
+    
+    const limitedSlots = availableSlots.slice(0, count);
+    const slotDescriptions = limitedSlots.map((slot, index) => {
+      const date = new Date(slot.start);
+      const timeStr = date.toLocaleTimeString('en-US', { 
+        hour: 'numeric', 
+        minute: '2-digit',
+        hour12: true 
+      });
+      const dateStr = date.toLocaleDateString('en-US', { 
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric'
+      });
+      return `${dateStr} at ${timeStr}`;
+    });
+    
+    const response = limitedSlots.length === 1 
+      ? `I have one available appointment: ${slotDescriptions[0]}. Would this work for you?`
+      : `I found ${limitedSlots.length} available appointments. I have ${slotDescriptions.join(', ')}. Which one works best for you?`;
+    
+    return {
+      response,
+      data: { slots: limitedSlots }
+    };
+  } catch (error) {
+    console.error('Error checking availability:', error);
+    return {
+      response: "I'm having trouble checking the calendar right now. Can you please try again in a moment?"
+    };
+  }
+}
+
+async function handleBookAppointment(params) {
+  try {
+    const { date, time, customerName, customerPhone, serviceType, duration = 30 } = params;
+    
+    // Parse natural language date and time
+    const appointmentDate = parseNaturalDate(date, time);
+    if (!appointmentDate) {
+      return {
+        response: "I'm sorry, I couldn't understand that date and time. Could you please try again? For example, you could say 'tomorrow at 2 PM' or 'next Monday at 10:30 AM'."
+      };
+    }
+    
+    // Calculate end time
+    const endTime = new Date(appointmentDate.getTime() + duration * 60000);
+    
+    // Validate business hours
+    const hour = appointmentDate.getHours();
+    const dayOfWeek = appointmentDate.getDay();
+    
+    if (hour < 9 || hour >= 17) {
+      return {
+        response: "I'm sorry, but our business hours are 9 AM to 5 PM. Could you choose a time during business hours?"
+      };
+    }
+    
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      return {
+        response: "We're closed on weekends. Could you choose a time Monday through Friday?"
+      };
+    }
+    
+    // Create appointment
+    const summary = `${serviceType || 'Appointment'} - ${customerName}`;
+    const description = [
+      `Customer: ${customerName}`,
+      customerPhone && `Phone: ${customerPhone}`,
+      serviceType && `Service: ${serviceType}`,
+      'Booked via TheChattyAI Voice Agent'
+    ].filter(Boolean).join('\n');
+    
+    const event = {
+      summary,
+      description,
+      start: {
+        dateTime: appointmentDate.toISOString(),
+        timeZone: 'America/New_York'
+      },
+      end: {
+        dateTime: endTime.toISOString(),
+        timeZone: 'America/New_York'
+      }
+    };
+    
+    // Book the appointment
+    const result = await calendar.events.insert({
+      calendarId: 'primary',
+      resource: event
+    });
+    
+    if (result.data) {
+      const confirmationTime = appointmentDate.toLocaleString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+      
+      return {
+        response: `Perfect! I've booked your ${serviceType || 'appointment'} for ${confirmationTime}. We'll see you then, ${customerName}! You should receive a confirmation email shortly.`,
+        data: {
+          appointmentId: result.data.id,
+          appointmentTime: confirmationTime,
+          customerName,
+          serviceType: serviceType || 'appointment'
+        }
+      };
+    } else {
+      return {
+        response: "I'm sorry, I couldn't book that appointment. Let me check what other times are available."
+      };
+    }
+  } catch (error) {
+    console.error('Error booking appointment:', error);
+    return {
+      response: "I'm sorry, I couldn't book that appointment. Would you like me to check for other available times?"
+    };
+  }
+}
+
+async function handleGetBusinessHours() {
+  return {
+    response: "We're open Monday through Friday from 9 AM to 5 PM. We're closed on weekends and holidays.",
+    data: {
+      businessHours: {
+        monday: { open: "09:00", close: "17:00" },
+        tuesday: { open: "09:00", close: "17:00" },
+        wednesday: { open: "09:00", close: "17:00" },
+        thursday: { open: "09:00", close: "17:00" },
+        friday: { open: "09:00", close: "17:00" },
+        saturday: null,
+        sunday: null
+      }
+    }
+  };
+}
+
+// Helper function to parse natural language dates
+function parseNaturalDate(dateStr, timeStr) {
+  try {
+    // Handle common date formats
+    const today = new Date();
+    let targetDate = new Date();
+    
+    // Parse date
+    if (dateStr.toLowerCase().includes('today')) {
+      targetDate = new Date();
+    } else if (dateStr.toLowerCase().includes('tomorrow')) {
+      targetDate = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+    } else if (dateStr.toLowerCase().includes('next monday')) {
+      targetDate = getNextWeekday(1); // Monday
+    } else if (dateStr.toLowerCase().includes('next tuesday')) {
+      targetDate = getNextWeekday(2); // Tuesday
+    } else if (dateStr.toLowerCase().includes('next wednesday')) {
+      targetDate = getNextWeekday(3); // Wednesday
+    } else if (dateStr.toLowerCase().includes('next thursday')) {
+      targetDate = getNextWeekday(4); // Thursday
+    } else if (dateStr.toLowerCase().includes('next friday')) {
+      targetDate = getNextWeekday(5); // Friday
+    } else {
+      // Try to parse as a regular date
+      targetDate = new Date(dateStr);
+      if (isNaN(targetDate.getTime())) {
+        return null;
+      }
+    }
+    
+    // Parse time
+    const timeMatch = timeStr.match(/(\d{1,2}):?(\d{0,2})\s*(am|pm)?/i);
+    if (timeMatch) {
+      let hours = parseInt(timeMatch[1]);
+      const minutes = parseInt(timeMatch[2] || '0');
+      const ampm = timeMatch[3] ? timeMatch[3].toLowerCase() : null;
+      
+      if (ampm === 'pm' && hours !== 12) hours += 12;
+      if (ampm === 'am' && hours === 12) hours = 0;
+      
+      targetDate.setHours(hours, minutes, 0, 0);
+    } else {
+      return null;
+    }
+    
+    return targetDate;
+  } catch (error) {
+    console.error('Error parsing date:', error);
+    return null;
+  }
+}
+
+function getNextWeekday(targetDay) {
+  const today = new Date();
+  const currentDay = today.getDay();
+  const daysUntilTarget = (targetDay - currentDay + 7) % 7;
+  const nextDate = new Date(today.getTime() + daysUntilTarget * 24 * 60 * 60 * 1000);
+  return nextDate;
+}
+
 // =============================================================================
 // SERVER STARTUP
 // =============================================================================

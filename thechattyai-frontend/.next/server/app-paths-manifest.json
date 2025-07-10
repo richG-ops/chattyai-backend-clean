@@ -1,5 +1,12 @@
 {
-  "/login/page": "app/login/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/clients/create/route": "app/api/clients/create/route.js",
+  "/api/auth/route": "app/api/auth/route.js",
+  "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
+  "/api/clients/[id]/metrics/route": "app/api/clients/[id]/metrics/route.js",
   "/dashboard/page": "app/dashboard/page.js",
-  "/page": "app/page.js"
+  "/login/page": "app/login/page.js",
+  "/onboarding/page": "app/onboarding/page.js",
+  "/page": "app/page.js",
+  "/setup-complete/page": "app/setup-complete/page.js"
 }
