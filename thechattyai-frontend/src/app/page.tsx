@@ -14,7 +14,7 @@ export default function Home() {
     setShowConfetti(true)
     // Small delay before navigation for confetti effect
     setTimeout(() => {
-      window.location.href = '/onboarding'
+      window.location.href = '/ai-employee-selection'
     }, 800)
   }
 
@@ -64,14 +64,14 @@ export default function Home() {
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12 animate-fadeInUp">
-            <Button 
-              size="lg" 
-              className="text-lg px-8 py-6 btn-premium bg-white text-blue-600 hover:bg-gray-50 shadow-2xl"
-              onClick={handleGetStartedClick}
-            >
-              <Zap className="w-5 h-5 mr-2" />
-              Get Started Free
-            </Button>
+                          <Button 
+                size="lg" 
+                className="text-lg px-8 py-6 btn-premium bg-white text-blue-600 hover:bg-gray-50 shadow-2xl"
+                onClick={handleGetStartedClick}
+              >
+                <Zap className="w-5 h-5 mr-2" />
+                Hire Your AI Team
+              </Button>
             <Link href="/demo">
               <Button 
                 size="lg" 

@@ -936,117 +936,156 @@ app.get('/api/test/metrics', (req, res) => {
   res.json({ success: true, metrics: mockMetrics });
 });
 
-// Vapi.ai webhook endpoint for voice calls
+// Import AI Personality Engine
+const { ResponseCoordinator } = require('./ai-personality-engine');
+const responseCoordinator = new ResponseCoordinator();
+
+// Vapi.ai webhook endpoint for voice calls with AI Personalities
 app.post('/vapi-webhook', authMiddleware, async (req, res) => {
   try {
-    const { function: functionName, parameters } = req.body;
+    const { function: functionName, parameters, aiEmployee = 'luna' } = req.body;
     
-    console.log('🎙️ Vapi webhook called:', { functionName, parameters });
+    console.log('🎙️ Vapi webhook called:', { functionName, parameters, aiEmployee });
     
+    let result;
     switch (functionName) {
       case 'checkAvailability':
-        const availabilityResult = await handleCheckAvailability(parameters);
-        res.json(availabilityResult);
+        result = await handleCheckAvailability(parameters, aiEmployee);
         break;
         
       case 'bookAppointment':
-        const bookingResult = await handleBookAppointment(parameters);
-        res.json(bookingResult);
+        result = await handleBookAppointment(parameters, aiEmployee);
         break;
         
       case 'getBusinessHours':
-        const businessHours = await handleGetBusinessHours();
-        res.json(businessHours);
+        result = await handleGetBusinessHours(aiEmployee);
+        break;
+        
+      case 'handleComplaint':
+        result = await handleComplaint(parameters, aiEmployee);
+        break;
+        
+      case 'qualifyLead':
+        result = await handleLeadQualification(parameters, aiEmployee);
         break;
         
       default:
-        res.json({
-          response: "I didn't understand that request. Could you please try again?"
-        });
+        // Generate personality-specific response for unknown requests
+        const personalityResponse = responseCoordinator.generateResponse(
+          aiEmployee, 
+          'general_inquiry', 
+          { question: functionName, ...parameters }
+        );
+        result = { response: personalityResponse.response };
     }
+    
+    res.json(result);
   } catch (error) {
     console.error('❌ Vapi webhook error:', error);
-    res.json({
-      response: "I'm having technical difficulties. Please try again in a moment or call us directly."
-    });
+    
+    // Even errors get personality-specific responses
+    const errorResponse = responseCoordinator.generateResponse(
+      req.body.aiEmployee || 'luna',
+      'technical_difficulty',
+      { error: error.message }
+    );
+    
+    res.json({ response: errorResponse.response });
   }
 });
 
-// Vapi helper functions
-async function handleCheckAvailability(params) {
+// Vapi helper functions with AI Personality Integration
+async function handleCheckAvailability(params, aiEmployee = 'luna') {
   try {
-    const { date, timePreference, count = 3 } = params;
+    const { date, timePreference, count = 3, customerName } = params;
     
     // Get available slots from existing endpoint
     const availableSlots = await getAvailableSlots(date, timePreference);
     
-    if (availableSlots.length === 0) {
-      return {
-        response: "I'm sorry, but I don't see any available appointments for that time. Would you like me to check another day?"
-      };
-    }
-    
-    const limitedSlots = availableSlots.slice(0, count);
-    const slotDescriptions = limitedSlots.map((slot, index) => {
-      const date = new Date(slot.start);
-      const timeStr = date.toLocaleTimeString('en-US', { 
-        hour: 'numeric', 
-        minute: '2-digit',
-        hour12: true 
-      });
-      const dateStr = date.toLocaleDateString('en-US', { 
-        weekday: 'long',
-        month: 'long',
-        day: 'numeric'
-      });
-      return `${dateStr} at ${timeStr}`;
-    });
-    
-    const response = limitedSlots.length === 1 
-      ? `I have one available appointment: ${slotDescriptions[0]}. Would this work for you?`
-      : `I found ${limitedSlots.length} available appointments. I have ${slotDescriptions.join(', ')}. Which one works best for you?`;
+    // Generate personality-specific response
+    const personalityResponse = responseCoordinator.generateResponse(
+      aiEmployee,
+      'booking_request',
+      {
+        customerName: customerName || 'there',
+        preferredTime: timePreference || date,
+        availableSlots: availableSlots.slice(0, count),
+        hasAvailability: availableSlots.length > 0
+      }
+    );
     
     return {
-      response,
-      data: { slots: limitedSlots }
+      response: personalityResponse.response,
+      data: { 
+        slots: availableSlots.slice(0, count),
+        aiEmployee,
+        confidence: personalityResponse.confidence
+      }
     };
   } catch (error) {
     console.error('Error checking availability:', error);
-    return {
-      response: "I'm having trouble checking the calendar right now. Can you please try again in a moment?"
-    };
+    
+    // Personality-specific error handling
+    const errorResponse = responseCoordinator.generateResponse(
+      aiEmployee,
+      'technical_difficulty',
+      { error: 'calendar_unavailable' }
+    );
+    
+    return { response: errorResponse.response };
   }
 }
 
-async function handleBookAppointment(params) {
+async function handleBookAppointment(params, aiEmployee = 'luna') {
   try {
     const { date, time, customerName, customerPhone, serviceType, duration = 30 } = params;
     
     // Parse natural language date and time
     const appointmentDate = parseNaturalDate(date, time);
     if (!appointmentDate) {
-      return {
-        response: "I'm sorry, I couldn't understand that date and time. Could you please try again? For example, you could say 'tomorrow at 2 PM' or 'next Monday at 10:30 AM'."
-      };
+      const errorResponse = responseCoordinator.generateResponse(
+        aiEmployee,
+        'scheduling_error',
+        { 
+          error: 'date_parse_failed',
+          customerName,
+          providedDate: date,
+          providedTime: time
+        }
+      );
+      return { response: errorResponse.response };
     }
     
     // Calculate end time
     const endTime = new Date(appointmentDate.getTime() + duration * 60000);
     
-    // Validate business hours
+    // Validate business hours with personality-specific responses
     const hour = appointmentDate.getHours();
     const dayOfWeek = appointmentDate.getDay();
     
     if (hour < 9 || hour >= 17) {
-      return {
-        response: "I'm sorry, but our business hours are 9 AM to 5 PM. Could you choose a time during business hours?"
-      };
+      const errorResponse = responseCoordinator.generateResponse(
+        aiEmployee,
+        'outside_business_hours',
+        { 
+          customerName,
+          requestedHour: hour,
+          businessHours: '9 AM to 5 PM'
+        }
+      );
+      return { response: errorResponse.response };
     }
     
     if (dayOfWeek === 0 || dayOfWeek === 6) {
-      return {
-        response: "We're closed on weekends. Could you choose a time Monday through Friday?"
-      };
+      const errorResponse = responseCoordinator.generateResponse(
+        aiEmployee,
+        'weekend_request',
+        { 
+          customerName,
+          dayOfWeek: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek]
+        }
+      );
+      return { response: errorResponse.response };
     }
     
     // Create appointment
@@ -1055,7 +1094,8 @@ async function handleBookAppointment(params) {
       `Customer: ${customerName}`,
       customerPhone && `Phone: ${customerPhone}`,
       serviceType && `Service: ${serviceType}`,
-      'Booked via TheChattyAI Voice Agent'
+      `Booked by: ${aiEmployee.charAt(0).toUpperCase() + aiEmployee.slice(1)} AI Assistant`,
+      'Powered by TheChattyAI'
     ].filter(Boolean).join('\n');
     
     const event = {
@@ -1088,19 +1128,36 @@ async function handleBookAppointment(params) {
         hour12: true
       });
       
+      // Generate personality-specific success response
+      const successResponse = responseCoordinator.generateResponse(
+        aiEmployee,
+        'booking_success',
+        {
+          customerName,
+          serviceType: serviceType || 'appointment',
+          confirmationTime,
+          appointmentId: result.data.id
+        }
+      );
+      
       return {
-        response: `Perfect! I've booked your ${serviceType || 'appointment'} for ${confirmationTime}. We'll see you then, ${customerName}! You should receive a confirmation email shortly.`,
+        response: successResponse.response,
         data: {
           appointmentId: result.data.id,
           appointmentTime: confirmationTime,
           customerName,
-          serviceType: serviceType || 'appointment'
+          serviceType: serviceType || 'appointment',
+          aiEmployee,
+          confidence: successResponse.confidence
         }
       };
     } else {
-      return {
-        response: "I'm sorry, I couldn't book that appointment. Let me check what other times are available."
-      };
+      const errorResponse = responseCoordinator.generateResponse(
+        aiEmployee,
+        'booking_failed',
+        { customerName, serviceType }
+      );
+      return { response: errorResponse.response };
     }
   } catch (error) {
     console.error('Error booking appointment:', error);
@@ -1110,21 +1167,227 @@ async function handleBookAppointment(params) {
   }
 }
 
-async function handleGetBusinessHours() {
-  return {
-    response: "We're open Monday through Friday from 9 AM to 5 PM. We're closed on weekends and holidays.",
-    data: {
-      businessHours: {
-        monday: { open: "09:00", close: "17:00" },
-        tuesday: { open: "09:00", close: "17:00" },
-        wednesday: { open: "09:00", close: "17:00" },
-        thursday: { open: "09:00", close: "17:00" },
-        friday: { open: "09:00", close: "17:00" },
-        saturday: null,
-        sunday: null
+async function handleGetBusinessHours(aiEmployee = 'luna') {
+  try {
+    const businessHours = {
+      monday: { open: '09:00', close: '17:00' },
+      tuesday: { open: '09:00', close: '17:00' },
+      wednesday: { open: '09:00', close: '17:00' },
+      thursday: { open: '09:00', close: '17:00' },
+      friday: { open: '09:00', close: '17:00' },
+      saturday: { closed: true },
+      sunday: { closed: true }
+    };
+    
+    const hoursResponse = responseCoordinator.generateResponse(
+      aiEmployee,
+      'business_hours_inquiry',
+      { businessHours }
+    );
+    
+    return {
+      response: hoursResponse.response,
+      data: { businessHours, aiEmployee }
+    };
+  } catch (error) {
+    console.error('Error getting business hours:', error);
+    
+    const errorResponse = responseCoordinator.generateResponse(
+      aiEmployee,
+      'technical_difficulty',
+      { error: 'hours_unavailable' }
+    );
+    
+    return { response: errorResponse.response };
+  }
+}
+
+// 🚨 COMPLAINT HANDLING - LUNA'S SPECIALTY
+async function handleComplaint(params, aiEmployee = 'luna') {
+  try {
+    const { customerName, issue, severity = 'medium', previousInteractions = [] } = params;
+    
+    const complaintResponse = responseCoordinator.generateResponse(
+      aiEmployee,
+      'complaint',
+      {
+        customerName,
+        issue,
+        severity,
+        previousInteractions
       }
-    }
+    );
+    
+    // Log complaint for management review
+    console.log('🚨 CUSTOMER COMPLAINT LOGGED:', {
+      timestamp: new Date().toISOString(),
+      customer: customerName,
+      issue,
+      severity,
+      handledBy: aiEmployee,
+      needsEscalation: severity === 'high'
+    });
+    
+    return {
+      response: complaintResponse.response,
+      data: {
+        ticketId: `COMP_${Date.now()}`,
+        aiEmployee,
+        severity,
+        escalationNeeded: severity === 'high',
+        followUpScheduled: true
+      }
+    };
+  } catch (error) {
+    console.error('Error handling complaint:', error);
+    
+    const errorResponse = responseCoordinator.generateResponse(
+      aiEmployee,
+      'complaint_system_error',
+      { customerName, error: error.message }
+    );
+    
+    return { response: errorResponse.response };
+  }
+}
+
+// 💎 LEAD QUALIFICATION - JADE'S SPECIALTY  
+async function handleLeadQualification(params, aiEmployee = 'jade') {
+  try {
+    const { 
+      customerName, 
+      businessType, 
+      currentSize, 
+      painPoint, 
+      budget, 
+      timeline,
+      contactInfo 
+    } = params;
+    
+    // Calculate lead score based on qualification criteria
+    const leadScore = calculateLeadScore({
+      businessType,
+      currentSize,
+      painPoint,
+      budget,
+      timeline
+    });
+    
+    const qualificationResponse = responseCoordinator.generateResponse(
+      aiEmployee,
+      'lead_qualification',
+      {
+        customerName,
+        businessType,
+        currentSize,
+        painPoint,
+        leadScore
+      }
+    );
+    
+    // Log qualified lead for sales follow-up
+    console.log('💎 QUALIFIED LEAD:', {
+      timestamp: new Date().toISOString(),
+      customer: customerName,
+      businessType,
+      leadScore,
+      handledBy: aiEmployee,
+      nextAction: leadScore >= 70 ? 'immediate_follow_up' : 'nurture_sequence'
+    });
+    
+    return {
+      response: qualificationResponse.response,
+      data: {
+        leadId: `LEAD_${Date.now()}`,
+        leadScore,
+        qualification: leadScore >= 70 ? 'hot' : leadScore >= 40 ? 'warm' : 'cold',
+        aiEmployee,
+        nextSteps: getNextSteps(leadScore),
+        estimatedValue: calculateEstimatedValue(businessType, currentSize)
+      }
+    };
+  } catch (error) {
+    console.error('Error qualifying lead:', error);
+    
+    const errorResponse = responseCoordinator.generateResponse(
+      aiEmployee,
+      'technical_difficulty',
+      { error: 'qualification_system_error' }
+    );
+    
+    return { response: errorResponse.response };
+  }
+}
+
+// 🧮 LEAD SCORING ALGORITHM (0.001% INSIGHT: Psychology + Business Intelligence)
+function calculateLeadScore({ businessType, currentSize, painPoint, budget, timeline }) {
+  let score = 0;
+  
+  // Business type scoring (some industries convert better)
+  const industryScores = {
+    'healthcare': 25,
+    'dental': 25, 
+    'beauty': 20,
+    'legal': 20,
+    'real_estate': 15,
+    'fitness': 15,
+    'other': 10
   };
+  score += industryScores[businessType] || 10;
+  
+  // Size scoring (sweet spot is 2-20 employees)
+  if (currentSize >= 2 && currentSize <= 20) score += 25;
+  else if (currentSize >= 21 && currentSize <= 50) score += 20;
+  else if (currentSize >= 1) score += 15;
+  
+  // Pain point scoring (urgent problems score higher)
+  const painScores = {
+    'missed_calls': 30,
+    'scheduling_chaos': 25,
+    'no_after_hours': 20,
+    'manual_processes': 20,
+    'customer_complaints': 25,
+    'staff_overwhelmed': 20
+  };
+  score += painScores[painPoint] || 10;
+  
+  // Budget scoring
+  if (budget >= 500) score += 20;
+  else if (budget >= 200) score += 15;
+  else if (budget >= 100) score += 10;
+  
+  // Timeline scoring (immediate need = higher score)
+  if (timeline === 'immediately') score += 20;
+  else if (timeline === 'this_month') score += 15;
+  else if (timeline === 'next_month') score += 10;
+  
+  return Math.min(score, 100); // Cap at 100
+}
+
+function getNextSteps(leadScore) {
+  if (leadScore >= 70) {
+    return ['immediate_demo_booking', 'send_roi_calculator', 'executive_intro_call'];
+  } else if (leadScore >= 40) {
+    return ['send_case_studies', 'nurture_email_sequence', 'follow_up_in_week'];
+  } else {
+    return ['add_to_newsletter', 'send_educational_content', 'follow_up_in_month'];
+  }
+}
+
+function calculateEstimatedValue(businessType, currentSize) {
+  const baseValues = {
+    'healthcare': 500,
+    'dental': 400,
+    'beauty': 300,
+    'legal': 600,
+    'real_estate': 400,
+    'fitness': 250
+  };
+  
+  const baseValue = baseValues[businessType] || 300;
+  const sizeMultiplier = Math.min(currentSize / 10, 3); // Max 3x multiplier
+  
+  return Math.round(baseValue * sizeMultiplier);
 }
 
 // Helper function to parse natural language dates
