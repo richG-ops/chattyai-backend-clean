@@ -89,14 +89,14 @@ export default function OnboardingPage() {
     }
   }
 
-  const isStepValid = () => {
+        const isStepValid = () => {
     switch (currentStep) {
       case 1:
         return formData.businessName && formData.businessType && formData.ownerName
       case 2:
         return formData.email && formData.phone
       case 3:
-        return formData.address && formData.timeZone
+        return true // Address is optional, timezone has default
       default:
         return false
     }
