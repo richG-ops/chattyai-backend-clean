@@ -16,40 +16,43 @@ export async function POST(request: NextRequest) {
     }
 
     // Create client in your existing backend
-    const backendUrl = process.env.CALENDAR_API_URL || 'http://localhost:4000'
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
 
-    // Call backend endpoint to create tenant & get JWT
-    const setupRes = await fetch(`${backendUrl}/setup-tenant-once`, {
-      method: 'GET'
+    // Call backend endpoint to create client & get JWT
+    const createRes = await fetch(`${backendUrl}/api/clients`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(clientData)
     })
 
-    if (!setupRes.ok) {
-      const text = await setupRes.text()
-      console.error('Backend setup error:', text)
-      return NextResponse.json({ error: 'Backend setup failed' }, { status: 500 })
+    if (!createRes.ok) {
+      const text = await createRes.text()
+      console.error('Backend client creation error:', text)
+      return NextResponse.json({ error: 'Failed to create client in backend' }, { status: 500 })
     }
 
-    const setupData = await setupRes.json()
+    const createData = await createRes.json()
 
-    // Expected response shape: { jwt_token, message }
-    const { jwt_token: token } = setupData
+    // Expected response shape: { success, client, credentials: { jwtToken, apiKey } }
+    const { credentials } = createData
+    const token = credentials?.jwtToken
 
     // Simple notification log
     console.log('🔔 NEW CLIENT SIGNUP (backend):', {
       business: clientData.businessName,
       owner: clientData.ownerName,
       email: clientData.email,
+      clientId: createData.client?.id,
       tokenPreview: token?.substring(0, 20) + '...'
     })
 
     return NextResponse.json({
       success: true,
-      client: {
-        businessName: clientData.businessName,
-        email: clientData.email,
-        status: 'setup_pending'
-      },
-      jwtToken: token,
+      client: createData.client,
+      jwt_token: token,
+      client_id: createData.client?.id,
       message: 'Client created successfully! Setup will be completed within 30 minutes.'
     })
      

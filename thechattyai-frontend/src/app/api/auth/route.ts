@@ -12,50 +12,91 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // For demo purposes, we'll use a simple authentication
+    // For demo purposes, we'll allow demo@business.com without password
     // In production, you'd verify against your database
-    const mockClients = [
-      {
-        id: 'client_demo_123',
+    if (email === 'demo@business.com') {
+      // Generate JWT token for demo user
+      const jwtSecret = process.env.JWT_SECRET || 'your-secret-key'
+      const demoClient = {
+        id: 'demo-client',
         email: 'demo@business.com',
         businessName: 'Demo Business',
         ownerName: 'Demo Owner',
-        businessType: 'salon'
+        businessType: 'salon',
+        apiKey: 'demo-api-key'
       }
-    ]
-
-    const client = mockClients.find(c => c.email === email)
-    
-    if (!client) {
-      return NextResponse.json(
-        { error: 'Client not found' },
-        { status: 404 }
+      
+      const token = jwt.sign(
+        { 
+          client_id: demoClient.id,
+          email: demoClient.email,
+          business_name: demoClient.businessName,
+          api_key: demoClient.apiKey
+        },
+        jwtSecret,
+        { expiresIn: '7d' }
       )
+
+      return NextResponse.json({
+        success: true,
+        token,
+        client: demoClient
+      })
     }
 
-    // Generate JWT token
-    const jwtSecret = process.env.JWT_SECRET || 'your-secret-key'
-    const token = jwt.sign(
-      { 
-        client_id: client.id,
-        email: client.email,
-        business_name: client.businessName
-      },
-      jwtSecret,
-      { expiresIn: '7d' }
-    )
-
-    return NextResponse.json({
-      success: true,
-      token,
-      client: {
-        id: client.id,
-        email: client.email,
-        businessName: client.businessName,
-        ownerName: client.ownerName,
-        businessType: client.businessType
+    // For real authentication, try to connect to backend
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
+    
+    try {
+      // Check if backend is available
+      const healthRes = await fetch(`${backendUrl}/health`, { 
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      
+      if (!healthRes.ok) {
+        throw new Error('Backend not available')
       }
-    })
+      
+      // In production, you would have a proper authentication endpoint
+      // For now, we'll use a simple email-based lookup
+      
+      // Generate a token for any valid email (simplified for demo)
+      const jwtSecret = process.env.JWT_SECRET || 'your-secret-key'
+      const clientId = `client_${Date.now()}`
+      
+      const token = jwt.sign(
+        { 
+          client_id: clientId,
+          email: email,
+          business_name: 'User Business',
+          api_key: `api_${Date.now()}`
+        },
+        jwtSecret,
+        { expiresIn: '7d' }
+      )
+
+      return NextResponse.json({
+        success: true,
+        token,
+        client: {
+          id: clientId,
+          email: email,
+          businessName: 'User Business',
+          ownerName: 'User',
+          businessType: 'service'
+        }
+      })
+      
+    } catch (backendError) {
+      console.warn('Backend not available, using demo mode:', backendError)
+      
+      // Fallback to demo mode if backend is not available
+      return NextResponse.json(
+        { error: 'Backend not available. Please try the demo account: demo@business.com' },
+        { status: 503 }
+      )
+    }
 
   } catch (error) {
     console.error('Auth error:', error)
@@ -87,7 +128,8 @@ export async function GET(request: NextRequest) {
       client: {
         id: decoded.client_id,
         email: decoded.email,
-        businessName: decoded.business_name
+        businessName: decoded.business_name,
+        apiKey: decoded.api_key
       }
     })
 

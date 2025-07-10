@@ -14,6 +14,7 @@ import { useRouter } from 'next/navigation'
 export default function OnboardingPage() {
   const [currentStep, setCurrentStep] = useState(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     businessName: '',
     businessType: '',
@@ -46,9 +47,12 @@ export default function OnboardingPage() {
 
   const handleSubmit = async () => {
     setIsSubmitting(true)
+    setError(null)
     
     try {
-      // Call the backend API to create the tenant
+      console.log('🚀 Starting client creation process...')
+      
+      // Call the backend API to create the client
       const response = await fetch('/api/clients/create', {
         method: 'POST',
         headers: {
@@ -58,23 +62,28 @@ export default function OnboardingPage() {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to create tenant')
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to create client')
       }
 
       const result = await response.json()
       
-      // Store the JWT token in localStorage
+      console.log('✅ Client created successfully:', result)
+      
+      // Store the JWT token and client info in localStorage
       if (result.jwt_token) {
         localStorage.setItem('setup_token', result.jwt_token)
         localStorage.setItem('client_id', result.client_id)
         localStorage.setItem('business_name', formData.businessName)
+        localStorage.setItem('client_data', JSON.stringify(result.client))
       }
 
       // Redirect to success page
       router.push('/setup-complete')
     } catch (error) {
-      console.error('Setup failed:', error)
-      // Handle error (show toast, etc.)
+      console.error('❌ Setup failed:', error)
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred'
+      setError(`Setup failed: ${errorMessage}`)
     } finally {
       setIsSubmitting(false)
     }
@@ -349,6 +358,19 @@ export default function OnboardingPage() {
                       <li>• You'll receive setup instructions for phone integration</li>
                       <li>• Our team will help you configure your AI voice agent</li>
                     </ul>
+                  </div>
+                </div>
+              )}
+
+              {/* Error Display */}
+              {error && (
+                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <div className="flex items-center">
+                    <div className="text-red-600 mr-2">⚠️</div>
+                    <div>
+                      <p className="text-sm text-red-800 font-medium">Setup Error</p>
+                      <p className="text-sm text-red-700">{error}</p>
+                    </div>
                   </div>
                 </div>
               )}
