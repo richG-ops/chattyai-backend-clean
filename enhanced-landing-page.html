@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChattyAI - Try Your AI Employee Before You Buy | Call 702-757-3092</title>
+    
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: -apple-system, system-ui, sans-serif;
+            line-height: 1.6;
+            color: #111827;
+        }
+        
+        /* Header */
+        .header {
+            background: white;
+            padding: 20px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .nav {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+        }
+        
+        .logo {
+            font-size: 28px;
+            font-weight: bold;
+            color: #14B8A6;
+        }
+        
+        .live-ticker {
+            background: #F0FDF4;
+            padding: 10px;
+            text-align: center;
+            font-size: 14px;
+            color: #065F46;
+            border-bottom: 1px solid #D1FAE5;
+        }
+        
+        /* Hero Section */
+        .hero {
+            padding: 60px 20px;
+            text-align: center;
+            background: linear-gradient(135deg, #F9FAFB 0%, #F3F4F6 100%);
+        }
+        
+        .hero h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            line-height: 1.2;
+        }
+        
+        .hero-subtitle {
+            font-size: 22px;
+            color: #6B7280;
+            margin-bottom: 50px;
+        }
+        
+        /* Demo Options Grid */
+        .demo-options {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        
+        .demo-card {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .demo-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+        }
+        
+        .demo-card.primary {
+            border: 3px solid #14B8A6;
+            background: linear-gradient(135deg, #F0FDF4 0%, white 100%);
+        }
+        
+        .demo-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+            display: block;
+        }
+        
+        .demo-title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .demo-phone {
+            font-size: 28px;
+            color: #14B8A6;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .demo-subtitle {
+            color: #6B7280;
+            font-size: 16px;
+        }
+        
+        .badge-new {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: #DC2626;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        /* Roleplay Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.6);
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 40px;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 600px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            animation: slideUp 0.3s ease;
+        }
+        
+        @keyframes slideUp {
+            from { transform: translateY(50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 36px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 20px;
+        }
+        
+        .close:hover { color: #000; }
+        
+        .roleplay-title {
+            font-size: 32px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .scenario-cards {
+            display: grid;
+            gap: 15px;
+            margin: 30px 0;
+        }
+        
+        .scenario-card {
+            background: #F9FAFB;
+            border: 2px solid #E5E7EB;
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .scenario-card:hover {
+            border-color: #14B8A6;
+            background: #F0FDF4;
+            transform: translateX(5px);
+        }
+        
+        .scenario-icon {
+            font-size: 32px;
+        }
+        
+        .scenario-text h4 {
+            font-size: 18px;
+            margin-bottom: 5px;
+        }
+        
+        .scenario-text p {
+            color: #6B7280;
+            font-size: 14px;
+        }
+        
+        .call-tips {
+            background: #FEF3C7;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .call-tips h4 {
+            font-size: 18px;
+            margin-bottom: 10px;
+            color: #92400E;
+        }
+        
+        .call-tips ul {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .call-tips li {
+            padding: 5px 0;
+            color: #78350F;
+        }
+        
+        .call-tips li:before {
+            content: "✓ ";
+            color: #F59E0B;
+            font-weight: bold;
+        }
+        
+        .cta-call {
+            background: #14B8A6;
+            color: white;
+            border: none;
+            padding: 20px 40px;
+            font-size: 20px;
+            border-radius: 12px;
+            cursor: pointer;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .cta-call:hover {
+            background: #0D9488;
+            transform: scale(1.05);
+        }
+        
+        /* Features Section */
+        .features {
+            padding: 80px 20px;
+            background: white;
+        }
+        
+        .features h2 {
+            text-align: center;
+            font-size: 36px;
+            margin-bottom: 50px;
+        }
+        
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 30px;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        
+        .feature-card {
+            text-align: center;
+            padding: 30px;
+        }
+        
+        .feature-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+        
+        .feature-title {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .feature-desc {
+            color: #6B7280;
+        }
+        
+        /* Interactive Demo Section */
+        .demo-section {
+            background: #F9FAFB;
+            padding: 80px 20px;
+            text-align: center;
+        }
+        
+        .demo-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .phone-simulator {
+            background: #1F2937;
+            border-radius: 40px;
+            padding: 20px;
+            max-width: 400px;
+            margin: 40px auto;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+        }
+        
+        .phone-screen {
+            background: white;
+            border-radius: 30px;
+            padding: 40px 20px;
+            min-height: 500px;
+        }
+        
+        .calling-display {
+            text-align: center;
+            padding: 40px 0;
+        }
+        
+        .ai-avatar {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 20px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #14B8A6, #0D9488);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 60px;
+            color: white;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        .calling-name {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .calling-status {
+            color: #6B7280;
+            font-size: 16px;
+        }
+        
+        /* CTA Section */
+        .cta-section {
+            background: #111827;
+            color: white;
+            padding: 80px 20px;
+            text-align: center;
+        }
+        
+        .cta-section h2 {
+            font-size: 36px;
+            margin-bottom: 20px;
+        }
+        
+        .cta-section p {
+            font-size: 20px;
+            margin-bottom: 40px;
+            opacity: 0.9;
+        }
+        
+        .cta-buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .btn-primary {
+            background: #14B8A6;
+            color: white;
+            padding: 20px 40px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-size: 18px;
+            font-weight: bold;
+            display: inline-block;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary:hover {
+            background: #0D9488;
+            transform: translateY(-2px);
+        }
+        
+        .btn-secondary {
+            background: transparent;
+            color: white;
+            border: 2px solid white;
+            padding: 20px 40px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-size: 18px;
+            font-weight: bold;
+            display: inline-block;
+            transition: all 0.3s;
+        }
+        
+        .btn-secondary:hover {
+            background: white;
+            color: #111827;
+        }
+        
+        /* Floating Elements */
+        .floating-cta {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: #14B8A6;
+            color: white;
+            padding: 15px 30px;
+            border-radius: 50px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            cursor: pointer;
+            z-index: 99;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            animation: bounce 2s infinite;
+        }
+        
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 32px; }
+            .demo-options { grid-template-columns: 1fr; }
+            .demo-card { padding: 30px; }
+            .cta-buttons { flex-direction: column; width: 100%; }
+            .btn-primary, .btn-secondary { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Live Activity Ticker -->
+    <div class="live-ticker">
+        <span id="ticker-text">🔥 Dr. Martinez Dental just saved $1,847 this month with ChattyAI</span>
+    </div>
+    
+    <!-- Header -->
+    <header class="header">
+        <nav class="nav">
+            <div class="logo">ChattyAI</div>
+            <a href="tel:17027573092" class="btn-primary">Call Demo: 702-757-3092</a>
+        </nav>
+    </header>
+    
+    <!-- Hero Section -->
+    <section class="hero">
+        <h1>Test Drive Your AI Employee<br>Before You Buy</h1>
+        <p class="hero-subtitle">Call our AI. Book a real appointment. Get a real text. See the magic.</p>
+        
+        <div class="demo-options">
+            <!-- Option 1: Call AI -->
+            <div class="demo-card primary" onclick="showRoleplayModal()">
+                <span class="badge-new">MOST POPULAR</span>
+                <span class="demo-icon">📞</span>
+                <h3 class="demo-title">Call Luna AI Now</h3>
+                <p class="demo-phone">702-757-3092</p>
+                <p class="demo-subtitle">Roleplay as YOUR customer</p>
+            </div>
+            
+            <!-- Option 2: Interactive Demo -->
+            <div class="demo-card" onclick="startInteractiveDemo()">
+                <span class="demo-icon">🛠️</span>
+                <h3 class="demo-title">Build Your AI</h3>
+                <p class="demo-subtitle">Customize voice & personality</p>
+                <p style="margin-top: 10px; font-weight: bold; color: #14B8A6;">Interactive Demo →</p>
+            </div>
+            
+            <!-- Option 3: Watch Video -->
+            <div class="demo-card" onclick="watchVideo()">
+                <span class="demo-icon">🎬</span>
+                <h3 class="demo-title">2-Minute Video</h3>
+                <p class="demo-subtitle">See real businesses winning</p>
+                <p style="margin-top: 10px; font-weight: bold; color: #14B8A6;">Watch Now →</p>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Roleplay Modal -->
+    <div id="roleplayModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            
+            <h2 class="roleplay-title">🎭 Let's Roleplay!</h2>
+            <p style="text-align: center; font-size: 18px; margin-bottom: 30px;">
+                Call <strong style="color: #14B8A6; font-size: 24px;">702-757-3092</strong><br>
+                Pretend to be a customer at YOUR business
+            </p>
+            
+            <div class="scenario-cards">
+                <div class="scenario-card" onclick="copyAndCall('I need to book an appointment')">
+                    <span class="scenario-icon">📅</span>
+                    <div class="scenario-text">
+                        <h4>"I need to book an appointment"</h4>
+                        <p>Luna will get your info & book a real meeting with us!</p>
+                    </div>
+                </div>
+                
+                <div class="scenario-card" onclick="copyAndCall('What services do you offer?')">
+                    <span class="scenario-icon">💼</span>
+                    <div class="scenario-text">
+                        <h4>"What services do you offer?"</h4>
+                        <p>Test how she handles service questions</p>
+                    </div>
+                </div>
+                
+                <div class="scenario-card" onclick="copyAndCall('I have a complaint')">
+                    <span class="scenario-icon">😤</span>
+                    <div class="scenario-text">
+                        <h4>"I have a complaint"</h4>
+                        <p>See how she handles difficult situations</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="call-tips">
+                <h4>🎯 What will happen on the call:</h4>
+                <ul>
+                    <li>Luna will greet you professionally</li>
+                    <li>She'll book a REAL appointment with me (Richard)</li>
+                    <li>You'll get a REAL confirmation text</li>
+                    <li>You'll see EXACTLY how your AI will work</li>
+                </ul>
+            </div>
+            
+            <button class="cta-call" onclick="makeCall()">
+                <span>📱</span>
+                <span>Call Now: 702-757-3092</span>
+            </button>
+        </div>
+    </div>
+    
+    <!-- Features Section -->
+    <section class="features">
+        <h2>Your AI Employee Never Sleeps</h2>
+        <div class="feature-grid">
+            <div class="feature-card">
+                <span class="feature-icon">⚡</span>
+                <h3 class="feature-title">Live in 60 Seconds</h3>
+                <p class="feature-desc">Just forward your phone. No complex setup.</p>
+            </div>
+            <div class="feature-card">
+                <span class="feature-icon">📅</span>
+                <h3 class="feature-title">Books Real Appointments</h3>
+                <p class="feature-desc">Syncs with your calendar automatically</p>
+            </div>
+            <div class="feature-card">
+                <span class="feature-icon">💬</span>
+                <h3 class="feature-title">Sends Text Updates</h3>
+                <p class="feature-desc">Confirmations, reminders, follow-ups</p>
+            </div>
+            <div class="feature-card">
+                <span class="feature-icon">🌍</span>
+                <h3 class="feature-title">Speaks 100+ Languages</h3>
+                <p class="feature-desc">Serve every customer perfectly</p>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Interactive Demo Section -->
+    <section class="demo-section">
+        <div class="demo-container">
+            <h2>See Your AI in Action</h2>
+            <p style="font-size: 20px; color: #6B7280; margin-bottom: 40px;">
+                This is exactly how your customers will experience your AI
+            </p>
+            
+            <div class="phone-simulator">
+                <div class="phone-screen">
+                    <div class="calling-display">
+                        <div class="ai-avatar">🤖</div>
+                        <h3 class="calling-name">Luna AI</h3>
+                        <p class="calling-status">Ready to take your call</p>
+                        <button class="cta-call" style="margin-top: 40px;" onclick="simulateCall()">
+                            Simulate Customer Call
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- CTA Section -->
+    <section class="cta-section">
+        <h2>Ready to Stop Losing Money?</h2>
+        <p>Every day without AI = Lost customers + Wasted money</p>
+        <div class="cta-buttons">
+            <a href="#" class="btn-primary" onclick="startFreeTrial()">Start 7-Day Free Trial</a>
+            <a href="tel:17027573092" class="btn-secondary">Call AI Demo: 702-757-3092</a>
+        </div>
+    </section>
+    
+    <!-- Floating CTA -->
+    <div class="floating-cta" onclick="makeCall()">
+        <span>📞</span>
+        <span>Try AI Now</span>
+    </div>
+    
+    <script>
+        // Live ticker updates
+        const tickerMessages = [
+            "🔥 Dr. Martinez Dental just saved $1,847 this month with ChattyAI",
+            "⚡ Tony's Pizza: 'Never missed an order since using ChattyAI'",
+            "📈 Sunrise Plumbing increased bookings by 47% last week",
+            "🎉 Sarah's Salon just activated their AI receptionist",
+            "💰 ABC Roofing saved 23 hours this week with ChattyAI"
+        ];
+        
+        let tickerIndex = 0;
+        setInterval(() => {
+            tickerIndex = (tickerIndex + 1) % tickerMessages.length;
+            document.getElementById('ticker-text').textContent = tickerMessages[tickerIndex];
+        }, 5000);
+        
+        // Modal functions
+        function showRoleplayModal() {
+            document.getElementById('roleplayModal').style.display = 'block';
+            
+            // Track engagement
+            if (typeof gtag !== 'undefined') {
+                gtag('event', 'demo_modal_opened', {
+                    'event_category': 'engagement',
+                    'event_label': 'roleplay'
+                });
+            }
+        }
+        
+        function closeModal() {
+            document.getElementById('roleplayModal').style.display = 'none';
+        }
+        
+        // Copy scenario and initiate call
+        function copyAndCall(text) {
+            navigator.clipboard.writeText(text);
+            makeCall();
+            
+            // Show copied notification
+            const originalText = event.target.innerHTML;
+            event.target.innerHTML = '✓ Copied! Now calling...';
+            setTimeout(() => {
+                event.target.innerHTML = originalText;
+            }, 2000);
+        }
+        
+        // Make call
+        function makeCall() {
+            window.location.href = 'tel:17027573092';
+            
+            // Track call
+            if (typeof gtag !== 'undefined') {
+                gtag('event', 'demo_call_initiated', {
+                    'event_category': 'conversion',
+                    'event_label': 'ai_demo'
+                });
+            }
+            
+            // Show follow-up message
+            setTimeout(() => {
+                if (confirm('How was your call with Luna? Ready to get your own AI receptionist?')) {
+                    startFreeTrial();
+                }
+            }, 120000); // 2 minutes later
+        }
+        
+        // Interactive demo
+        function startInteractiveDemo() {
+            window.location.href = '/demo-wizard';
+        }
+        
+        // Watch video
+        function watchVideo() {
+            window.open('https://youtu.be/your-demo-video', '_blank');
+        }
+        
+        // Simulate call
+        function simulateCall() {
+            const display = document.querySelector('.calling-display');
+            display.innerHTML = `
+                <div class="ai-avatar" style="animation: pulse 1s infinite;">📞</div>
+                <h3 class="calling-name">Calling...</h3>
+                <p class="calling-status">Connecting to your business</p>
+                <audio autoplay>
+                    <source src="/audio/phone-ring.mp3" type="audio/mpeg">
+                </audio>
+            `;
+            
+            setTimeout(() => {
+                display.innerHTML = `
+                    <div class="ai-avatar">😊</div>
+                    <h3 class="calling-name">Connected!</h3>
+                    <p class="calling-status">"Thank you for calling! How can I help you today?"</p>
+                    <button class="btn-primary" style="margin-top: 40px;" onclick="startFreeTrial()">
+                        Get Your Own AI →
+                    </button>
+                `;
+            }, 3000);
+        }
+        
+        // Start free trial
+        function startFreeTrial() {
+            window.location.href = '/signup';
+        }
+        
+        // Exit intent
+        let exitIntentShown = false;
+        document.addEventListener('mouseleave', (e) => {
+            if (e.clientY <= 0 && !exitIntentShown) {
+                exitIntentShown = true;
+                if (confirm('Wait! Call our AI before you go: 702-757-3092')) {
+                    makeCall();
+                }
+            }
+        });
+        
+        // Close modal on outside click
+        window.onclick = function(event) {
+            const modal = document.getElementById('roleplayModal');
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html> 

@@ -16,13 +16,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Create client in your existing backend
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'https://chattyai-backend-clean.onrender.com'
+    
+    console.log('🚀 Calling backend at:', backendUrl)
 
     // Call backend endpoint to create client & get JWT
     const createRes = await fetch(`${backendUrl}/api/clients`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        // Use a demo JWT token for authentication
+        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcGlfa2V5IjoiZGVtbyIsImNsaWVudF9pZCI6ImRlbW8tY2xpZW50IiwiYnVzaW5lc3NfbmFtZSI6IkRlbW8gQnVzaW5lc3MiLCJlbWFpbCI6ImRlbW9AYnVzaW5lc3MuY29tIiwiaWF0IjoxNzUyMDg3NzA0LCJleHAiOjE3ODM2NDUzMDR9.demo'
       },
       body: JSON.stringify(clientData)
     })

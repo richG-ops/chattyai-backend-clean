@@ -1,103 +1,116 @@
 import { NextRequest, NextResponse } from 'next/server'
-import jwt from 'jsonwebtoken'
+import { createClient } from '@supabase/supabase-js'
+
+// Create Supabase client with service key for server-side operations
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_KEY!,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
+)
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password } = await request.json()
+    const { action, email, password, fullName, companyName } = await request.json()
     
-    if (!email) {
+    if (!email || !password) {
       return NextResponse.json(
-        { error: 'Email is required' },
+        { error: 'Email and password are required' },
         { status: 400 }
       )
     }
 
-    // For demo purposes, we'll allow demo@business.com without password
-    // In production, you'd verify against your database
-    if (email === 'demo@business.com') {
-      // Generate JWT token for demo user
-      const jwtSecret = process.env.JWT_SECRET || 'your-secret-key'
-      const demoClient = {
-        id: 'demo-client',
-        email: 'demo@business.com',
-        businessName: 'Demo Business',
-        ownerName: 'Demo Owner',
-        businessType: 'salon',
-        apiKey: 'demo-api-key'
-      }
-      
-      const token = jwt.sign(
-        { 
-          client_id: demoClient.id,
-          email: demoClient.email,
-          business_name: demoClient.businessName,
-          api_key: demoClient.apiKey
-        },
-        jwtSecret,
-        { expiresIn: '7d' }
-      )
-
-      return NextResponse.json({
-        success: true,
-        token,
-        client: demoClient
-      })
-    }
-
-    // For real authentication, try to connect to backend
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
-    
-    try {
-      // Check if backend is available
-      const healthRes = await fetch(`${backendUrl}/health`, { 
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
-      })
-      
-      if (!healthRes.ok) {
-        throw new Error('Backend not available')
-      }
-      
-      // In production, you would have a proper authentication endpoint
-      // For now, we'll use a simple email-based lookup
-      
-      // Generate a token for any valid email (simplified for demo)
-      const jwtSecret = process.env.JWT_SECRET || 'your-secret-key'
-      const clientId = `client_${Date.now()}`
-      
-      const token = jwt.sign(
-        { 
-          client_id: clientId,
-          email: email,
-          business_name: 'User Business',
-          api_key: `api_${Date.now()}`
-        },
-        jwtSecret,
-        { expiresIn: '7d' }
-      )
-
-      return NextResponse.json({
-        success: true,
-        token,
-        client: {
-          id: clientId,
-          email: email,
-          businessName: 'User Business',
-          ownerName: 'User',
-          businessType: 'service'
+    // REAL AUTHENTICATION - NO FAKE DEMO
+    if (action === 'signup') {
+      // Create new user
+      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true, // Auto-confirm for now, add email verification later
+        user_metadata: {
+          full_name: fullName,
+          company_name: companyName
         }
       })
-      
-    } catch (backendError) {
-      console.warn('Backend not available, using demo mode:', backendError)
-      
-      // Fallback to demo mode if backend is not available
-      return NextResponse.json(
-        { error: 'Backend not available. Please try the demo account: demo@business.com' },
-        { status: 503 }
-      )
-    }
 
+      if (authError) {
+        console.error('Signup error:', authError)
+        return NextResponse.json(
+          { error: authError.message },
+          { status: 400 }
+        )
+      }
+
+      // Create profile record
+      const { error: profileError } = await supabaseAdmin
+        .from('profiles')
+        .insert({
+          id: authData.user.id,
+          email: authData.user.email,
+          full_name: fullName,
+          company_name: companyName
+        })
+
+      if (profileError) {
+        console.error('Profile creation error:', profileError)
+      }
+
+      // Generate session for immediate login
+      const { data: sessionData, error: sessionError } = await supabaseAdmin.auth.admin
+        .generateLink({
+          type: 'magiclink',
+          email: email,
+        })
+
+      return NextResponse.json({
+        success: true,
+        user: {
+          id: authData.user.id,
+          email: authData.user.email,
+          fullName,
+          companyName
+        },
+        message: 'Account created successfully! Please check your email to confirm.'
+      })
+
+    } else {
+      // Sign in existing user
+      const { data, error } = await supabaseAdmin.auth.signInWithPassword({
+        email,
+        password
+      })
+
+      if (error) {
+        console.error('Login error:', error)
+        return NextResponse.json(
+          { error: 'Invalid email or password' },
+          { status: 401 }
+        )
+      }
+
+      // Get user profile
+      const { data: profile } = await supabaseAdmin
+        .from('profiles')
+        .select('*')
+        .eq('id', data.user.id)
+        .single()
+
+      return NextResponse.json({
+        success: true,
+        session: data.session,
+        user: {
+          id: data.user.id,
+          email: data.user.email,
+          fullName: profile?.full_name,
+          companyName: profile?.company_name
+        }
+      })
+    }
+    
   } catch (error) {
     console.error('Auth error:', error)
     return NextResponse.json(
@@ -119,21 +132,37 @@ export async function GET(request: NextRequest) {
     }
 
     const token = authHeader.split(' ')[1]
-    const jwtSecret = process.env.JWT_SECRET || 'your-secret-key'
     
-    const decoded = jwt.verify(token, jwtSecret) as any
+    // Verify the JWT with Supabase
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
     
+    if (error || !user) {
+      return NextResponse.json(
+        { error: 'Invalid token' },
+        { status: 401 }
+      )
+    }
+
+    // Get full profile
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+
     return NextResponse.json({
       success: true,
-      client: {
-        id: decoded.client_id,
-        email: decoded.email,
-        businessName: decoded.business_name,
-        apiKey: decoded.api_key
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: profile?.full_name,
+        companyName: profile?.company_name,
+        createdAt: user.created_at
       }
     })
 
   } catch (error) {
+    console.error('Token verification error:', error)
     return NextResponse.json(
       { error: 'Invalid token' },
       { status: 401 }

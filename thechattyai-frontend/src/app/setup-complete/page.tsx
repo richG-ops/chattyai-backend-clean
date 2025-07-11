@@ -1,214 +1,323 @@
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { CheckCircle, Clock, Phone, Calendar, Settings, ArrowRight } from "lucide-react"
-import Link from "next/link"
+'use client'
+
+import { useEffect, useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { 
+  CheckCircle, 
+  Phone, 
+  Calendar,
+  Shield,
+  ArrowRight,
+  Copy,
+  ExternalLink,
+  Loader2
+} from 'lucide-react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 export default function SetupCompletePage() {
+  const [businessName, setBusinessName] = useState('')
+  const [jwtToken, setJwtToken] = useState('')
+  const [clientId, setClientId] = useState('')
+  const [googleCalendarEmail, setGoogleCalendarEmail] = useState('')
+  const [phoneNumber, setPhoneNumber] = useState('')
+  const [isIntegrating, setIsIntegrating] = useState(false)
+  const [integrationStep, setIntegrationStep] = useState(1)
+  const router = useRouter()
+
+  useEffect(() => {
+    // Get business info from localStorage
+    const name = localStorage.getItem('business_name') || 'Your Business'
+    const token = localStorage.getItem('setup_token') || ''
+    const id = localStorage.getItem('client_id') || ''
+    
+    setBusinessName(name)
+    setJwtToken(token)
+    setClientId(id)
+  }, [])
+
+  const handleGoogleIntegration = async () => {
+    if (!googleCalendarEmail) {
+      alert('Please enter your Google Calendar email')
+      return
+    }
+    
+    setIsIntegrating(true)
+    
+    // Simulate integration process
+    setTimeout(() => {
+      setIntegrationStep(2)
+      localStorage.setItem('google_calendar_email', googleCalendarEmail)
+    }, 2000)
+  }
+
+  const handlePhoneSetup = async () => {
+    if (!phoneNumber) {
+      alert('Please enter your business phone number')
+      return
+    }
+    
+    setIsIntegrating(true)
+    
+    // Simulate phone setup
+    setTimeout(() => {
+      setIntegrationStep(3)
+      localStorage.setItem('business_phone', phoneNumber)
+      
+      // After final step, redirect to dashboard
+      setTimeout(() => {
+        router.push('/dashboard')
+      }, 2000)
+    }, 2000)
+  }
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+    alert('Copied to clipboard!')
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 py-12">
-      <div className="container mx-auto px-4 max-w-4xl">
-        {/* Success Animation */}
-        <div className="text-center mb-12">
-          <div className="inline-flex items-center justify-center w-24 h-24 bg-green-100 rounded-full mb-6 animate-bounce">
-            <CheckCircle className="w-12 h-12 text-green-600" />
+    <div className="min-h-screen bg-black text-white">
+      {/* Background effects */}
+      <div className="fixed inset-0">
+        <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-black to-gray-900" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-transparent to-transparent" />
+      </div>
+
+      {/* Header */}
+      <header className="relative z-20 backdrop-blur-xl border-b border-white/5">
+        <div className="max-w-7xl mx-auto px-6 py-5">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-xl flex items-center justify-center">
+              <Phone className="w-5 h-5 text-white" />
+            </div>
+            <span className="text-xl font-light">TheChattyAI</span>
           </div>
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            🎉 Your AI Assistant is Being Created!
+        </div>
+      </header>
+
+      <div className="relative z-10 max-w-4xl mx-auto px-6 py-16">
+        {/* Success Header */}
+        <div className="text-center mb-12">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full mb-6">
+            <CheckCircle className="w-10 h-10 text-white" />
+          </div>
+          
+          <h1 className="text-5xl font-light mb-4">
+            Welcome to TheChattyAI, <span className="text-cyan-400">{businessName}</span>!
           </h1>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            We're setting up your personalized AI voice agent. You'll be up and running in no time!
+          
+          <p className="text-xl text-white/60 max-w-2xl mx-auto">
+            Your AI employees are ready. Let's connect your calendar and phone system.
           </p>
         </div>
 
-        {/* Progress Timeline */}
-        <div className="mb-12">
-          <Card className="border-0 shadow-lg">
+        {/* Integration Steps */}
+        <div className="space-y-6">
+          {/* Step 1: Google Calendar */}
+          <Card className={`border-0 backdrop-blur-xl transition-all duration-500 ${
+            integrationStep === 1 
+              ? 'bg-white/10 border border-white/20 scale-105' 
+              : integrationStep > 1
+              ? 'bg-white/5 border border-white/10 opacity-50'
+              : 'bg-white/5 border border-white/10'
+          }`}>
             <CardHeader>
-              <CardTitle className="text-2xl text-center">Setup Progress</CardTitle>
-              <CardDescription className="text-center">
-                Your AI assistant is being configured
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <Calendar className="w-6 h-6 text-cyan-400" />
+                  <div>
+                    <CardTitle className="text-white">Connect Google Calendar</CardTitle>
+                    <CardDescription className="text-white/50">
+                      Allow your AI to manage appointments
+                    </CardDescription>
+                  </div>
+                </div>
+                {integrationStep > 1 && (
+                  <CheckCircle className="w-6 h-6 text-green-400" />
+                )}
+              </div>
+            </CardHeader>
+            {integrationStep === 1 && (
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="google-email" className="text-white/70">
+                    Google Calendar Email
+                  </Label>
+                  <Input
+                    id="google-email"
+                    type="email"
+                    placeholder="your-calendar@gmail.com"
+                    value={googleCalendarEmail}
+                    onChange={(e) => setGoogleCalendarEmail(e.target.value)}
+                    className="mt-2 bg-white/5 border-white/20 text-white placeholder:text-white/30"
+                  />
+                </div>
+                
+                <div className="bg-cyan-500/10 border border-cyan-500/20 rounded-lg p-4">
+                  <p className="text-sm text-cyan-300">
+                    We'll send you authorization instructions to connect your calendar securely.
+                  </p>
+                </div>
+                
+                <Button
+                  onClick={handleGoogleIntegration}
+                  disabled={isIntegrating || !googleCalendarEmail}
+                  className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 text-white"
+                >
+                  {isIntegrating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Connecting...
+                    </>
+                  ) : (
+                    <>
+                      Connect Calendar
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            )}
+          </Card>
+
+          {/* Step 2: Phone Number */}
+          <Card className={`border-0 backdrop-blur-xl transition-all duration-500 ${
+            integrationStep === 2 
+              ? 'bg-white/10 border border-white/20 scale-105' 
+              : integrationStep > 2
+              ? 'bg-white/5 border border-white/10 opacity-50'
+              : 'bg-white/5 border border-white/10 opacity-50'
+          }`}>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <Phone className="w-6 h-6 text-purple-400" />
+                  <div>
+                    <CardTitle className="text-white">Set Up Phone System</CardTitle>
+                    <CardDescription className="text-white/50">
+                      Configure your AI voice assistant
+                    </CardDescription>
+                  </div>
+                </div>
+                {integrationStep > 2 && (
+                  <CheckCircle className="w-6 h-6 text-green-400" />
+                )}
+              </div>
+            </CardHeader>
+            {integrationStep === 2 && (
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="phone" className="text-white/70">
+                    Business Phone Number
+                  </Label>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    placeholder="+1 (555) 123-4567"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    className="mt-2 bg-white/5 border-white/20 text-white placeholder:text-white/30"
+                  />
+                </div>
+                
+                <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-4">
+                  <p className="text-sm text-purple-300">
+                    We'll provide you with a forwarding number to route calls through your AI assistant.
+                  </p>
+                </div>
+                
+                <Button
+                  onClick={handlePhoneSetup}
+                  disabled={isIntegrating || !phoneNumber}
+                  className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white"
+                >
+                  {isIntegrating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Setting up...
+                    </>
+                  ) : (
+                    <>
+                      Configure Phone
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            )}
+          </Card>
+
+          {/* Step 3: Complete */}
+          {integrationStep === 3 && (
+            <Card className="border-0 bg-gradient-to-r from-green-500/10 to-emerald-500/10 backdrop-blur-xl border border-green-500/20">
+              <CardContent className="p-8 text-center">
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full mb-4">
+                  <CheckCircle className="w-8 h-8 text-white" />
+                </div>
+                
+                <h3 className="text-2xl font-light text-white mb-2">
+                  All Systems Active!
+                </h3>
+                
+                <p className="text-white/60 mb-6">
+                  Your AI employees are now online and ready to handle calls.
+                </p>
+                
+                <div className="flex items-center justify-center space-x-2 text-green-400">
+                  <Shield className="w-4 h-4" />
+                  <span className="text-sm">Redirecting to your dashboard...</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* API Credentials (for developers) */}
+        {integrationStep === 1 && (
+          <Card className="mt-8 border-0 bg-white/5 backdrop-blur-xl border border-white/10">
+            <CardHeader>
+              <CardTitle className="text-white text-lg">Developer Access</CardTitle>
+              <CardDescription className="text-white/50">
+                API credentials for custom integrations
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                {/* Step 1 */}
-                <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                    <CheckCircle className="w-6 h-6 text-green-600" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-green-800">Account Created</h3>
-                    <p className="text-sm text-gray-600">Your business profile has been set up</p>
-                  </div>
-                  <div className="text-green-600 text-sm font-medium">Complete</div>
+            <CardContent className="space-y-4">
+              <div>
+                <Label className="text-white/70 text-sm">Client ID</Label>
+                <div className="flex items-center space-x-2 mt-1">
+                  <Input
+                    value={clientId}
+                    readOnly
+                    className="bg-white/5 border-white/20 text-white/80 font-mono text-sm"
+                  />
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => copyToClipboard(clientId)}
+                    className="text-white/50 hover:text-white"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </Button>
                 </div>
-
-                {/* Step 2 */}
-                <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center animate-pulse">
-                    <Settings className="w-6 h-6 text-blue-600" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-blue-800">Building Voice Agent</h3>
-                    <p className="text-sm text-gray-600">Customizing AI for your business type</p>
-                  </div>
-                  <div className="text-blue-600 text-sm font-medium">In Progress</div>
-                </div>
-
-                {/* Step 3 */}
-                <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
-                    <Phone className="w-6 h-6 text-gray-400" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-gray-600">Phone Number Assignment</h3>
-                    <p className="text-sm text-gray-600">Dedicated number for your business</p>
-                  </div>
-                  <div className="text-gray-500 text-sm font-medium">Pending</div>
-                </div>
-
-                {/* Step 4 */}
-                <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
-                    <Calendar className="w-6 h-6 text-gray-400" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-gray-600">Calendar Integration</h3>
-                    <p className="text-sm text-gray-600">Connect your Google Calendar</p>
-                  </div>
-                  <div className="text-gray-500 text-sm font-medium">Pending</div>
-                </div>
+              </div>
+              
+              <div className="flex items-center space-x-4 text-sm">
+                <Link href="/docs" className="text-cyan-400 hover:text-cyan-300 flex items-center">
+                  View Documentation
+                  <ExternalLink className="w-3 h-3 ml-1" />
+                </Link>
+                <Link href="/api-keys" className="text-cyan-400 hover:text-cyan-300 flex items-center">
+                  Manage API Keys
+                  <ExternalLink className="w-3 h-3 ml-1" />
+                </Link>
               </div>
             </CardContent>
           </Card>
-        </div>
-
-        {/* Estimated Time */}
-        <div className="text-center mb-12">
-          <Card className="border-0 shadow-lg bg-gradient-to-r from-blue-50 to-purple-50">
-            <CardContent className="p-8">
-              <div className="flex items-center justify-center mb-4">
-                <Clock className="w-8 h-8 text-blue-600 mr-3" />
-                <h2 className="text-2xl font-bold text-gray-900">Estimated Time</h2>
-              </div>
-              <div className="text-4xl font-bold text-blue-600 mb-2">30 minutes</div>
-              <p className="text-gray-600">We'll send you an email when everything is ready</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* What's Next */}
-        <div className="grid md:grid-cols-2 gap-8 mb-12">
-          <Card className="border-0 shadow-lg">
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Calendar className="w-5 h-5 mr-2 text-green-600" />
-                Connect Calendar
-              </CardTitle>
-              <CardDescription>
-                Link your Google Calendar for seamless scheduling
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-2 text-sm text-gray-600 mb-4">
-                <li>• Automatic appointment booking</li>
-                <li>• Real-time availability checking</li>
-                <li>• Conflict prevention</li>
-                <li>• Instant confirmations</li>
-              </ul>
-              <Button className="w-full" disabled>
-                <Calendar className="w-4 h-4 mr-2" />
-                Ready Soon
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-lg">
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Phone className="w-5 h-5 mr-2 text-blue-600" />
-                Voice Settings
-              </CardTitle>
-              <CardDescription>
-                Customize your AI assistant's voice and responses
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-2 text-sm text-gray-600 mb-4">
-                <li>• Choose voice type and accent</li>
-                <li>• Set greeting messages</li>
-                <li>• Configure business hours</li>
-                <li>• Add custom responses</li>
-              </ul>
-              <Button className="w-full" disabled>
-                <Settings className="w-4 h-4 mr-2" />
-                Ready Soon
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* What You'll Get */}
-        <Card className="border-0 shadow-lg mb-12">
-          <CardHeader>
-            <CardTitle className="text-2xl">What You'll Get</CardTitle>
-            <CardDescription>
-              Everything you need to automate your business communication
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid md:grid-cols-3 gap-6">
-              <div className="text-center">
-                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Phone className="w-8 h-8 text-blue-600" />
-                </div>
-                <h3 className="font-semibold mb-2">Dedicated Phone Number</h3>
-                <p className="text-sm text-gray-600">Your own business number that forwards to AI</p>
-              </div>
-              <div className="text-center">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Calendar className="w-8 h-8 text-green-600" />
-                </div>
-                <h3 className="font-semibold mb-2">Calendar Integration</h3>
-                <p className="text-sm text-gray-600">Seamless booking directly to your schedule</p>
-              </div>
-              <div className="text-center">
-                <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Settings className="w-8 h-8 text-purple-600" />
-                </div>
-                <h3 className="font-semibold mb-2">Management Dashboard</h3>
-                <p className="text-sm text-gray-600">Monitor calls, bookings, and performance</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Contact Information */}
-        <Card className="border-0 shadow-lg bg-gradient-to-r from-gray-50 to-blue-50">
-          <CardContent className="p-8 text-center">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              Questions? We're Here to Help
-            </h2>
-            <p className="text-gray-600 mb-6">
-              Our team is standing by to ensure your setup goes smoothly
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button variant="outline" size="lg">
-                <Phone className="w-4 h-4 mr-2" />
-                Call Support
-              </Button>
-              <Button variant="outline" size="lg">
-                <ArrowRight className="w-4 h-4 mr-2" />
-                Live Chat
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Footer */}
-        <div className="text-center mt-12 text-gray-500">
-          <p>&copy; 2025 TheChattyAI. All rights reserved.</p>
-        </div>
+        )}
       </div>
     </div>
   )

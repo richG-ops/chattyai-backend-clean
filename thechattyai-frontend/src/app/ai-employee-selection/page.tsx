@@ -1,14 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { 
   Phone, 
   ArrowRight,
   Sparkles,
-  Heart,
-  Zap,
-  Shield
+  Brain,
+  Mic,
+  Calendar,
+  Shield,
+  TrendingUp,
+  Users
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -18,46 +21,62 @@ interface AIEmployee {
   name: string
   role: string
   specialty: string
-  personality: string
+  icon: React.ReactNode
+  gradient: string
+  accentColor: string
   description: string
-  excellence: string
-  color: string
-  glowColor: string
+  capabilities: string[]
+  performance: {
+    metric: string
+    value: string
+  }
 }
 
 const aiEmployees: AIEmployee[] = [
   {
     id: 'luna',
     name: 'Luna',
-    role: 'Customer Success',
-    specialty: 'Relationship Excellence',
-    personality: 'Empathetic • Warm • Trusted',
-    description: 'Transforms customer experiences with genuine care and exceptional problem-solving.',
-    excellence: 'Masters the art of turning challenges into customer loyalty',
-    color: 'from-blue-400 to-cyan-400',
-    glowColor: 'shadow-blue-400/50'
+    role: 'Customer Excellence',
+    specialty: 'Empathetic Communication',
+    icon: <Brain className="w-8 h-8" />,
+    gradient: 'from-cyan-500 via-blue-500 to-indigo-600',
+    accentColor: 'cyan',
+    description: 'Neural-optimized for emotional intelligence and conflict resolution.',
+    capabilities: ['Complaint Resolution', 'Empathetic Responses', 'Customer Retention'],
+    performance: {
+      metric: 'Satisfaction Rate',
+      value: '98.7%'
+    }
   },
   {
     id: 'jade',
     name: 'Jade',
-    role: 'Sales Intelligence',
-    specialty: 'Growth Catalyst',
-    personality: 'Strategic • Insightful • Results-Driven',
-    description: 'Identifies opportunities and drives growth through intelligent conversations.',
-    excellence: 'Elevates every interaction into meaningful business outcomes',
-    color: 'from-purple-400 to-pink-400',
-    glowColor: 'shadow-purple-400/50'
+    role: 'Revenue Intelligence',
+    specialty: 'Strategic Sales',
+    icon: <TrendingUp className="w-8 h-8" />,
+    gradient: 'from-purple-500 via-pink-500 to-red-500',
+    accentColor: 'purple',
+    description: 'Advanced lead qualification with predictive revenue modeling.',
+    capabilities: ['Lead Scoring', 'Objection Handling', 'Deal Acceleration'],
+    performance: {
+      metric: 'Conversion Rate',
+      value: '73.2%'
+    }
   },
   {
     id: 'flora',
     name: 'Flora',
-    role: 'Operations',
-    specialty: 'Seamless Coordination',
-    personality: 'Precise • Efficient • Reliable',
-    description: 'Orchestrates complex operations with flawless attention to detail.',
-    excellence: 'Delivers perfection in every process and interaction',
-    color: 'from-green-400 to-emerald-400',
-    glowColor: 'shadow-green-400/50'
+    role: 'Operations AI',
+    specialty: 'System Orchestration',
+    icon: <Calendar className="w-8 h-8" />,
+    gradient: 'from-emerald-500 via-green-500 to-teal-500',
+    accentColor: 'emerald',
+    description: 'Quantum-efficient scheduling across multiple dimensions.',
+    capabilities: ['Multi-location Sync', 'Resource Optimization', 'Conflict Prevention'],
+    performance: {
+      metric: 'Efficiency Score',
+      value: '99.9%'
+    }
   }
 ]
 
@@ -67,46 +86,86 @@ export default function AIEmployeeSelectionPage() {
   const [isConnecting, setIsConnecting] = useState(false)
   const router = useRouter()
 
+  useEffect(() => {
+    // Add parallax effect on mouse move
+    const handleMouseMove = (e: MouseEvent) => {
+      const cards = document.querySelectorAll('.ai-card')
+      cards.forEach((card: any) => {
+        const rect = card.getBoundingClientRect()
+        const x = e.clientX - rect.left - rect.width / 2
+        const y = e.clientY - rect.top - rect.height / 2
+        
+        card.style.transform = `
+          perspective(1000px)
+          rotateY(${x * 0.05}deg)
+          rotateX(${-y * 0.05}deg)
+          translateZ(20px)
+        `
+      })
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    return () => window.removeEventListener('mousemove', handleMouseMove)
+  }, [])
+
   const handleConnect = async (employeeId: string) => {
     setIsConnecting(true)
     localStorage.setItem('selected_ai_employee', employeeId)
     
     setTimeout(() => {
       router.push('/onboarding?aiEmployee=' + employeeId)
-    }, 1200)
-  }
-
-  const getEmployeeIcon = (employeeId: string) => {
-    switch(employeeId) {
-      case 'luna': return <Heart className="w-6 h-6 text-blue-400" />
-      case 'jade': return <Zap className="w-6 h-6 text-purple-400" />
-      case 'flora': return <Shield className="w-6 h-6 text-green-400" />
-      default: return <Sparkles className="w-6 h-6" />
-    }
+    }, 1000)
   }
 
   return (
-    <div className="min-h-screen bg-black text-white overflow-hidden relative">
-      {/* Ambient background */}
-      <div className="fixed inset-0 bg-gradient-to-br from-slate-900/20 via-purple-900/10 to-blue-900/20 pointer-events-none" />
-      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-cyan-900/20 via-black to-black pointer-events-none" />
+    <div className="min-h-screen bg-black overflow-hidden relative">
+      {/* Premium gradient background */}
+      <div className="fixed inset-0">
+        <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-black to-gray-900" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-[conic-gradient(from_90deg_at_50%_50%,_var(--tw-gradient-stops))] from-purple-900/10 via-transparent to-blue-900/10" />
+      </div>
+      
+      {/* Animated particles */}
+      <div className="fixed inset-0 overflow-hidden">
+        {[...Array(20)].map((_, i) => (
+          <div
+            key={i}
+            className="absolute w-1 h-1 bg-white/20 rounded-full animate-float-particle"
+            style={{
+              left: `${Math.random() * 100}%`,
+              animationDelay: `${Math.random() * 10}s`,
+              animationDuration: `${10 + Math.random() * 20}s`
+            }}
+          />
+        ))}
+      </div>
       
       {/* Header */}
-      <header className="relative z-10 border-b border-white/5 backdrop-blur-xl">
-        <div className="max-w-6xl mx-auto px-6 py-6">
+      <header className="relative z-20 backdrop-blur-xl border-b border-white/5">
+        <div className="max-w-7xl mx-auto px-6 py-5">
           <div className="flex justify-between items-center">
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-lg flex items-center justify-center shadow-lg shadow-cyan-400/30">
-                <Phone className="w-4 h-4 text-white" />
+            <Link href="/" className="flex items-center space-x-3 group">
+              <div className="relative">
+                <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-xl blur-lg opacity-75 group-hover:opacity-100 transition-opacity" />
+                <div className="relative w-10 h-10 bg-black rounded-xl flex items-center justify-center border border-white/20">
+                  <Phone className="w-5 h-5 text-white" />
+                </div>
               </div>
-              <span className="text-xl font-medium">TheChattyAI</span>
-            </div>
-            
-            <Link href="/login">
-              <Button variant="ghost" size="sm" className="text-white/70 hover:text-white hover:bg-white/5">
-                Sign In
-              </Button>
+              <span className="text-xl font-light text-white">TheChattyAI</span>
             </Link>
+            
+            <nav className="flex items-center space-x-6">
+              <Link href="/login" className="text-white/70 hover:text-white transition-colors">
+                Sign In
+              </Link>
+              <Button 
+                variant="ghost" 
+                className="text-white/70 hover:text-white hover:bg-white/5 rounded-full px-4"
+              >
+                Contact Sales
+              </Button>
+            </nav>
           </div>
         </div>
       </header>
@@ -114,260 +173,221 @@ export default function AIEmployeeSelectionPage() {
       <div className="relative z-10 max-w-7xl mx-auto px-6 py-16">
         {/* Hero Section */}
         <div className="text-center mb-20">
-          <div className="inline-flex items-center px-4 py-2 bg-white/5 backdrop-blur-sm rounded-full text-white/70 text-sm mb-8 border border-white/10">
-            <Sparkles className="w-4 h-4 mr-2" />
-            Meet Your AI Team
+          <div className="inline-flex items-center px-4 py-2 rounded-full bg-white/5 backdrop-blur-sm border border-white/10 mb-8">
+            <Sparkles className="w-4 h-4 mr-2 text-cyan-400" />
+            <span className="text-sm text-white/70">Next Generation AI Workforce</span>
           </div>
           
-          <h1 className="text-6xl lg:text-8xl font-light mb-8 leading-tight">
-            Your AI
+          <h1 className="text-7xl lg:text-8xl font-extralight mb-6 tracking-tight">
+            <span className="text-white">Select Your</span>
             <br />
-            <span className="bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 bg-clip-text text-transparent">
-              Employees
+            <span className="bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 bg-clip-text text-transparent font-light">
+              AI Professional
             </span>
           </h1>
           
-          <p className="text-xl text-white/60 max-w-2xl mx-auto leading-relaxed">
-            Three exceptional AI professionals, each with unique expertise 
-            and proven excellence in their field.
+          <p className="text-xl text-white/50 max-w-3xl mx-auto leading-relaxed font-light">
+            Industry-leading AI employees engineered for excellence. 
+            Each with specialized neural architectures optimized for their domain.
           </p>
         </div>
 
-        {/* 3D Floating AI Characters */}
-        <div className="grid lg:grid-cols-3 gap-12 mb-20 perspective-1000">
+        {/* AI Employee Grid */}
+        <div className="grid lg:grid-cols-3 gap-8 perspective-1000">
           {aiEmployees.map((employee, index) => (
-            <div 
+            <div
               key={employee.id}
-              className="relative group cursor-pointer"
-              onClick={() => setSelectedEmployee(employee.id)}
+              className="ai-card relative group"
               onMouseEnter={() => setHoveredEmployee(employee.id)}
               onMouseLeave={() => setHoveredEmployee(null)}
+              onClick={() => setSelectedEmployee(employee.id)}
               style={{
-                animationDelay: `${index * 200}ms`,
+                transformStyle: 'preserve-3d',
+                animation: `fadeInUp 0.8s ease-out ${index * 0.1}s both`
               }}
             >
-              {/* 3D Floating Character Container */}
+              {/* Holographic effect background */}
               <div className={`
-                floating-character relative w-80 h-96 mx-auto transform-gpu transition-all duration-700 ease-out
-                ${hoveredEmployee === employee.id ? 'scale-110 rotate-y-12' : 'scale-100'}
-                ${selectedEmployee === employee.id ? 'selected-glow' : ''}
+                absolute inset-0 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500
+                bg-gradient-to-br ${employee.gradient} blur-xl
+              `} />
+              
+              {/* Main card */}
+              <div className={`
+                relative rounded-3xl p-8 backdrop-blur-xl border transition-all duration-500
+                ${selectedEmployee === employee.id 
+                  ? 'bg-white/10 border-white/30 scale-[1.02]' 
+                  : 'bg-white/5 border-white/10 hover:bg-white/10'
+                }
               `}>
-                
-                {/* Main Character Body */}
-                <div className={`
-                  character-body absolute inset-0 rounded-3xl transform-gpu transition-all duration-500
-                  bg-gradient-to-br ${employee.color} shadow-2xl ${employee.glowColor}
-                  ${hoveredEmployee === employee.id ? 'shadow-3xl' : ''}
-                `}>
+                {/* 3D Holographic Display */}
+                <div className="relative h-48 mb-8 rounded-2xl overflow-hidden bg-black/50">
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
                   
-                  {/* Character Face */}
-                  <div className="absolute inset-x-0 top-12 flex justify-center">
+                  {/* Holographic grid */}
+                  <div className="absolute inset-0 opacity-20">
+                    <div className="grid grid-cols-8 h-full">
+                      {[...Array(8)].map((_, i) => (
+                        <div key={i} className="border-r border-cyan-500/30" />
+                      ))}
+                    </div>
+                    <div className="absolute inset-0 grid grid-rows-8">
+                      {[...Array(8)].map((_, i) => (
+                        <div key={i} className="border-b border-cyan-500/30" />
+                      ))}
+                    </div>
+                  </div>
+                  
+                  {/* Floating icon */}
+                  <div className={`
+                    absolute inset-0 flex items-center justify-center
+                    ${hoveredEmployee === employee.id ? 'animate-pulse-scale' : ''}
+                  `}>
                     <div className={`
-                      character-head w-32 h-32 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 
-                      shadow-xl relative transform-gpu transition-all duration-500
-                      ${hoveredEmployee === employee.id ? 'animate-pulse-glow' : ''}
+                      relative p-6 rounded-2xl
+                      bg-gradient-to-br ${employee.gradient}
+                      shadow-2xl transform rotate-3 hover:rotate-6 transition-transform
                     `}>
-                      
-                      {/* Glowing Eyes */}
-                      <div className="absolute top-8 left-6 w-6 h-6 rounded-full bg-cyan-400 shadow-lg shadow-cyan-400/70 animate-pulse-slow"></div>
-                      <div className="absolute top-8 right-6 w-6 h-6 rounded-full bg-cyan-400 shadow-lg shadow-cyan-400/70 animate-pulse-slow"></div>
-                      
-                      {/* VR Headset */}
-                      <div className="absolute top-4 inset-x-2 h-12 bg-gradient-to-r from-gray-600 to-gray-700 rounded-lg shadow-inner">
-                        <div className="absolute top-2 left-2 w-8 h-8 bg-cyan-400/30 rounded border border-cyan-400/50"></div>
-                        <div className="absolute top-2 right-2 w-8 h-8 bg-cyan-400/30 rounded border border-cyan-400/50"></div>
-                      </div>
-                      
-                      {/* Headphones */}
-                      <div className="absolute -left-4 top-2 w-8 h-16 bg-gradient-to-b from-gray-600 to-gray-700 rounded-full"></div>
-                      <div className="absolute -right-4 top-2 w-8 h-16 bg-gradient-to-b from-gray-600 to-gray-700 rounded-full"></div>
-                      
-                      {/* Antennas */}
-                      <div className="absolute -top-2 left-12 w-1 h-8 bg-gradient-to-t from-gray-600 to-cyan-400 rounded-full"></div>
-                      <div className="absolute -top-2 right-12 w-1 h-8 bg-gradient-to-t from-gray-600 to-cyan-400 rounded-full"></div>
-                      <div className="absolute -top-6 left-11 w-3 h-3 bg-cyan-400 rounded-full shadow-lg shadow-cyan-400/70"></div>
-                      <div className="absolute -top-6 right-11 w-3 h-3 bg-cyan-400 rounded-full shadow-lg shadow-cyan-400/70"></div>
+                      {employee.icon}
                     </div>
                   </div>
                   
-                  {/* Character Body */}
-                  <div className="absolute bottom-16 inset-x-8">
-                    <div className="w-full h-32 bg-gradient-to-b from-gray-700 to-gray-800 rounded-2xl shadow-xl relative">
-                      {/* Chest Panel */}
-                      <div className="absolute top-4 inset-x-4 h-6 bg-cyan-400/20 rounded border border-cyan-400/30"></div>
-                      {/* Power Indicator */}
-                      <div className="absolute top-12 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-cyan-400 rounded-full shadow-lg shadow-cyan-400/70 animate-pulse-slow"></div>
-                    </div>
+                  {/* Performance metric overlay */}
+                  <div className="absolute top-4 right-4 bg-black/80 backdrop-blur-sm rounded-lg px-3 py-2 border border-white/10">
+                    <div className="text-xs text-white/50">{employee.performance.metric}</div>
+                    <div className="text-lg font-light text-white">{employee.performance.value}</div>
                   </div>
                 </div>
 
-                {/* Info Panel */}
-                <div className={`
-                  info-panel absolute -bottom-8 inset-x-0 transform-gpu transition-all duration-500
-                  ${hoveredEmployee === employee.id ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}
-                `}>
-                  <div className="bg-black/80 backdrop-blur-xl rounded-2xl p-6 border border-white/10">
-                    <div className="text-center mb-4">
-                      <div className="flex items-center justify-center mb-2">
-                        {getEmployeeIcon(employee.id)}
-                        <h3 className="text-2xl font-medium text-white ml-3">{employee.name}</h3>
-                      </div>
-                      <p className="text-white/60">{employee.role}</p>
-                      <div className="inline-block px-3 py-1 bg-white/5 rounded-full text-xs text-white/70 mt-2">
-                        {employee.specialty}
-                      </div>
+                {/* Content */}
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-3xl font-light text-white mb-1">{employee.name}</h3>
+                    <p className="text-sm text-white/50">{employee.role}</p>
+                    <div className={`
+                      inline-block mt-2 px-3 py-1 rounded-full text-xs
+                      bg-gradient-to-r ${employee.gradient} bg-opacity-20
+                      border border-white/10 text-white/80
+                    `}>
+                      {employee.specialty}
                     </div>
-
-                    <div className="space-y-3 mb-6">
-                      <p className="text-white/60 text-sm text-center">{employee.personality}</p>
-                      <p className="text-white/80 text-sm leading-relaxed">{employee.description}</p>
-                      
-                      <div className="p-3 bg-white/5 rounded-lg border border-white/10">
-                        <p className="text-white/70 text-sm italic text-center">
-                          "{employee.excellence}"
-                        </p>
-                      </div>
-                    </div>
-
-                    <Button
-                      onClick={() => handleConnect(employee.id)}
-                      disabled={isConnecting}
-                      className={`
-                        w-full py-3 text-base font-medium transition-all duration-300 rounded-xl
-                        bg-gradient-to-r ${employee.color} text-black hover:shadow-lg ${employee.glowColor}
-                        transform-gpu hover:scale-105
-                      `}
-                    >
-                      {isConnecting && selectedEmployee === employee.id ? (
-                        <div className="flex items-center space-x-2">
-                          <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
-                          <span>Connecting...</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-center space-x-2">
-                          <span>Connect with {employee.name}</span>
-                          <ArrowRight className="w-4 h-4" />
-                        </div>
-                      )}
-                    </Button>
                   </div>
+
+                  <p className="text-white/60 text-sm leading-relaxed">
+                    {employee.description}
+                  </p>
+
+                  {/* Capabilities */}
+                  <div className="space-y-2">
+                    {employee.capabilities.map((capability, i) => (
+                      <div key={i} className="flex items-center space-x-2">
+                        <div className={`w-1.5 h-1.5 rounded-full bg-${employee.accentColor}-400`} />
+                        <span className="text-sm text-white/70">{capability}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Connect button */}
+                  <Button
+                    onClick={() => handleConnect(employee.id)}
+                    disabled={isConnecting && selectedEmployee === employee.id}
+                    className={`
+                      w-full rounded-xl py-6 font-light text-base transition-all duration-300
+                      ${selectedEmployee === employee.id
+                        ? `bg-gradient-to-r ${employee.gradient} text-white border-0 shadow-lg`
+                        : 'bg-white/5 text-white hover:bg-white/10 border border-white/20'
+                      }
+                    `}
+                  >
+                    {isConnecting && selectedEmployee === employee.id ? (
+                      <div className="flex items-center justify-center space-x-2">
+                        <div className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin" />
+                        <span>Initializing...</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center space-x-2">
+                        <span>Deploy {employee.name}</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </div>
+                    )}
+                  </Button>
                 </div>
+
+                {/* Selection indicator */}
+                {selectedEmployee === employee.id && (
+                  <div className="absolute -inset-[1px] rounded-3xl bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 opacity-50 blur-sm -z-10" />
+                )}
               </div>
             </div>
           ))}
         </div>
 
-        {/* Bottom Section */}
-        <div className="text-center">
-          <div className="inline-flex items-center space-x-8 text-sm text-white/50">
-            <div className="flex items-center">
-              <div className="w-2 h-2 bg-cyan-400 rounded-full mr-2 animate-pulse-slow"></div>
-              <span>Available 24/7</span>
-            </div>
-            <div className="flex items-center">
-              <div className="w-2 h-2 bg-blue-400 rounded-full mr-2 animate-pulse-slow"></div>
-              <span>Instant Setup</span>
-            </div>
-            <div className="flex items-center">
-              <div className="w-2 h-2 bg-purple-400 rounded-full mr-2 animate-pulse-slow"></div>
-              <span>Elite Performance</span>
-            </div>
+        {/* Bottom indicators */}
+        <div className="flex justify-center mt-16 space-x-8">
+          <div className="flex items-center space-x-2 text-white/50">
+            <Shield className="w-4 h-4" />
+            <span className="text-sm">Enterprise Security</span>
+          </div>
+          <div className="flex items-center space-x-2 text-white/50">
+            <Mic className="w-4 h-4" />
+            <span className="text-sm">Voice Optimized</span>
+          </div>
+          <div className="flex items-center space-x-2 text-white/50">
+            <Users className="w-4 h-4" />
+            <span className="text-sm">24/7 Availability</span>
           </div>
         </div>
       </div>
 
-      {/* Disney-Level CSS Animations */}
+      {/* CSS Animations */}
       <style jsx>{`
         .perspective-1000 {
           perspective: 1000px;
         }
         
-        .floating-character {
-          animation: float 6s ease-in-out infinite, sway 8s ease-in-out infinite;
-          transform-style: preserve-3d;
-        }
-        
-        .floating-character:nth-child(1) {
-          animation-delay: 0s, 0s;
-        }
-        
-        .floating-character:nth-child(2) {
-          animation-delay: -2s, -2.5s;
-        }
-        
-        .floating-character:nth-child(3) {
-          animation-delay: -4s, -5s;
-        }
-        
-        .character-body {
-          transform-style: preserve-3d;
-        }
-        
-        .character-head {
-          animation: subtle-bob 4s ease-in-out infinite;
-        }
-        
-        .rotate-y-12 {
-          transform: rotateY(12deg) scale(1.1);
-        }
-        
-        .selected-glow {
-          filter: drop-shadow(0 0 20px cyan) drop-shadow(0 0 40px cyan);
-        }
-        
-        .animate-pulse-glow {
-          animation: pulse-glow 2s ease-in-out infinite;
-        }
-        
-        .animate-pulse-slow {
-          animation: pulse-slow 3s ease-in-out infinite;
-        }
-        
-        .shadow-3xl {
-          box-shadow: 0 35px 70px -12px rgba(0, 0, 0, 0.5),
-                      0 0 50px rgba(34, 211, 238, 0.3);
-        }
-        
-        @keyframes float {
-          0%, 100% { transform: translateY(0px) rotateX(0deg); }
-          50% { transform: translateY(-20px) rotateX(2deg); }
-        }
-        
-        @keyframes sway {
-          0%, 100% { transform: translateX(0px) rotateZ(0deg); }
-          25% { transform: translateX(-10px) rotateZ(-1deg); }
-          75% { transform: translateX(10px) rotateZ(1deg); }
-        }
-        
-        @keyframes subtle-bob {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-5px); }
-        }
-        
-        @keyframes pulse-glow {
-          0%, 100% { filter: brightness(1) drop-shadow(0 0 10px currentColor); }
-          50% { filter: brightness(1.3) drop-shadow(0 0 20px currentColor); }
-        }
-        
-        @keyframes pulse-slow {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.7; transform: scale(1.1); }
-        }
-        
-        /* Smooth reveal animation */
-        .floating-character {
-          animation: float 6s ease-in-out infinite, 
-                     sway 8s ease-in-out infinite,
-                     reveal 1s ease-out forwards;
-          opacity: 0;
-          transform: translateY(50px);
-        }
-        
-        @keyframes reveal {
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(40px);
+          }
           to {
             opacity: 1;
             transform: translateY(0);
           }
+        }
+        
+        @keyframes float-particle {
+          from {
+            transform: translateY(100vh) rotate(0deg);
+            opacity: 0;
+          }
+          10% {
+            opacity: 1;
+          }
+          90% {
+            opacity: 1;
+          }
+          to {
+            transform: translateY(-100vh) rotate(360deg);
+            opacity: 0;
+          }
+        }
+        
+        @keyframes pulse-scale {
+          0%, 100% {
+            transform: scale(1);
+          }
+          50% {
+            transform: scale(1.05);
+          }
+        }
+        
+        .animate-float-particle {
+          animation: float-particle linear infinite;
+        }
+        
+        .animate-pulse-scale {
+          animation: pulse-scale 2s ease-in-out infinite;
         }
       `}</style>
     </div>

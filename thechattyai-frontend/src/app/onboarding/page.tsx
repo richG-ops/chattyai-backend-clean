@@ -23,11 +23,15 @@ export default function OnboardingPage() {
     phone: '',
     address: '',
     description: '',
-    timeZone: 'America/New_York'
+    timeZone: 'America/New_York',
+    googleCalendarEmail: '',
+    phoneNumber: '',
+    password: '',
+    confirmPassword: ''
   })
   const router = useRouter()
 
-  const totalSteps = 3
+  const totalSteps = 4
   const progressPercent = (currentStep / totalSteps) * 100
 
   const handleInputChange = (field: string, value: string) => {
@@ -50,32 +54,63 @@ export default function OnboardingPage() {
     setError(null)
     
     try {
-      console.log('🚀 Starting client creation process...')
+      console.log('🚀 Starting account creation process...')
       
-      // Call the backend API to create the client
-      const response = await fetch('/api/clients/create', {
+      // Validate passwords match
+      if (formData.password !== formData.confirmPassword) {
+        throw new Error('Passwords do not match')
+      }
+      
+      if (formData.password.length < 8) {
+        throw new Error('Password must be at least 8 characters')
+      }
+      
+      // Create real user account with Supabase
+      const response = await fetch('/api/auth', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          action: 'signup',
+          email: formData.email,
+          password: formData.password,
+          fullName: formData.ownerName,
+          companyName: formData.businessName
+        }),
       })
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to create client')
+        throw new Error(errorData.error || 'Failed to create account')
       }
 
       const result = await response.json()
       
-      console.log('✅ Client created successfully:', result)
+      console.log('✅ Account created successfully:', result)
       
-      // Store the JWT token and client info in localStorage
-      if (result.jwt_token) {
-        localStorage.setItem('setup_token', result.jwt_token)
-        localStorage.setItem('client_id', result.client_id)
+      // Store user info in localStorage for immediate access
+      if (result.user) {
+        localStorage.setItem('user_id', result.user.id)
+        localStorage.setItem('user_email', result.user.email)
         localStorage.setItem('business_name', formData.businessName)
-        localStorage.setItem('client_data', JSON.stringify(result.client))
+        localStorage.setItem('owner_name', formData.ownerName)
+      }
+      
+      // Create business profile in backend
+      const profileResponse = await fetch('/api/clients/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: result.user.id,
+          ...formData
+        }),
+      })
+
+      if (!profileResponse.ok) {
+        console.error('Profile creation failed, but account was created')
       }
 
       // Redirect to success page
@@ -94,7 +129,7 @@ export default function OnboardingPage() {
       case 1:
         return formData.businessName && formData.businessType && formData.ownerName
       case 2:
-        return formData.email && formData.phone
+        return formData.email && formData.phone && formData.password && formData.confirmPassword
       case 3:
         return true // Address is optional, timezone has default
       default:
@@ -294,6 +329,37 @@ export default function OnboardingPage() {
                       onChange={(e) => handleInputChange('email', e.target.value)}
                       className="mt-1 focus-premium"
                     />
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="password" className="text-sm font-medium text-gray-700">
+                      Password * (min 8 characters)
+                    </Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      placeholder="Create a secure password"
+                      value={formData.password}
+                      onChange={(e) => handleInputChange('password', e.target.value)}
+                      className="mt-1 focus-premium"
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="confirmPassword" className="text-sm font-medium text-gray-700">
+                      Confirm Password *
+                    </Label>
+                    <Input
+                      id="confirmPassword"
+                      type="password"
+                      placeholder="Confirm your password"
+                      value={formData.confirmPassword}
+                      onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
+                      className="mt-1 focus-premium"
+                    />
+                    {formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword && (
+                      <p className="text-xs text-red-600 mt-1">Passwords do not match</p>
+                    )}
                   </div>
                   
                   <div>

@@ -26,18 +26,27 @@ export default function LoginPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ 
+          action: 'signin',
+          email, 
+          password 
+        }),
       })
 
       const data = await response.json()
 
       if (data.success) {
-        // Store token and redirect to dashboard
-        localStorage.setItem('auth_token', data.token)
-        localStorage.setItem('client_data', JSON.stringify(data.client))
+        // Store session and user info
+        if (data.session) {
+          localStorage.setItem('access_token', data.session.access_token)
+          localStorage.setItem('refresh_token', data.session.refresh_token)
+        }
+        localStorage.setItem('user_data', JSON.stringify(data.user))
+        
+        // Redirect to dashboard
         window.location.href = '/dashboard'
       } else {
-        setError(data.error || 'Login failed')
+        setError(data.error || 'Invalid email or password')
       }
     } catch (err) {
       setError('Network error. Please try again.')
@@ -134,28 +143,22 @@ export default function LoginPage() {
           </CardContent>
         </Card>
 
-        {/* Demo Account */}
-        <Card className="border-0 shadow-lg bg-blue-50">
+        {/* Demo Account - REMOVED */}
+        <Card className="border-0 shadow-lg bg-gradient-to-r from-blue-50 to-purple-50">
           <CardContent className="p-6">
             <div className="text-center">
-              <h3 className="font-semibold text-blue-900 mb-2">Demo Account</h3>
-              <p className="text-sm text-blue-800 mb-4">
-                Try the dashboard with our demo account
+              <h3 className="font-semibold text-gray-900 mb-2">New to TheChattyAI?</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Create your AI employees in minutes
               </p>
-              <div className="text-sm text-blue-700 space-y-1">
-                <p><strong>Email:</strong> demo@business.com</p>
-                <p><strong>Password:</strong> Not required</p>
-              </div>
-              <Button
-                onClick={() => {
-                  setEmail('demo@business.com')
-                  setPassword('')
-                }}
-                variant="outline"
-                className="mt-4 border-blue-300 text-blue-700 hover:bg-blue-100"
-              >
-                Use Demo Account
-              </Button>
+              <Link href="/onboarding">
+                <Button className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:shadow-lg">
+                  Start Free Trial
+                </Button>
+              </Link>
+              <p className="text-xs text-gray-500 mt-3">
+                No credit card required • 14-day free trial
+              </p>
             </div>
           </CardContent>
         </Card>
