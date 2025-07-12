@@ -58,13 +58,40 @@ app.use(cors({
 // Trust proxy for accurate IP addresses
 app.set('trust proxy', true);
 
-// Health check endpoint
+// Production-grade health check endpoint
 app.get('/healthz', (req, res) => {
-  res.status(200).json({
+  const healthStatus = {
     status: 'healthy',
     service: 'thechattyai-calendar-api',
+    version: '1.0.0',
     timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development',
+    features: {
+      google_calendar: GOOGLE_CALENDAR_ENABLED,
+      authentication: true,
+      vapi_webhook: true,
+      simple_vapi: true
+    },
+    dependencies: {
+      google_credentials: !!process.env.GOOGLE_CREDENTIALS || fs.existsSync('credentials.json'),
+      google_token: !!process.env.GOOGLE_TOKEN || fs.existsSync('token.json'),
+      database: !!process.env.DATABASE_URL,
+      jwt_secret: !!process.env.JWT_SECRET
+    },
+    memory: {
+      used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+      total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024)
+    }
+  };
+  
+  // Determine overall health
+  const hasBasicDependencies = healthStatus.dependencies.jwt_secret;
+  const overallStatus = hasBasicDependencies ? 'healthy' : 'degraded';
+  
+  res.status(overallStatus === 'healthy' ? 200 : 206).json({
+    ...healthStatus,
+    status: overallStatus
   });
 });
 
@@ -88,7 +115,7 @@ app.get('/', (req, res) => {
 const SCOPES = ['https://www.googleapis.com/auth/calendar'];
 const TOKEN_PATH = 'token.json';
 
-// Production-ready credential loading with fallback
+// Production-ready credential loading with graceful degradation
 let CREDENTIALS;
 let oAuth2Client;
 let GOOGLE_CALENDAR_ENABLED = false;
@@ -103,8 +130,8 @@ try {
     console.log('✅ Loaded credentials from local file');
     GOOGLE_CALENDAR_ENABLED = true;
   } else {
-    console.log('⚠️ No Google credentials found - running in fallback mode');
-    console.log('📌 Set GOOGLE_CREDENTIALS environment variable to enable calendar features');
+    console.log('⚠️ No Google credentials found - running in demo mode');
+    console.log('📌 Service will respond with mock data until credentials are configured');
   }
 
   if (GOOGLE_CALENDAR_ENABLED && CREDENTIALS) {
@@ -113,13 +140,13 @@ try {
       oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
       console.log('✅ Google OAuth client initialized');
     } else {
-      console.log('⚠️ Invalid credential structure - calendar features disabled');
+      console.log('⚠️ Invalid credential structure - running in demo mode');
       GOOGLE_CALENDAR_ENABLED = false;
     }
   }
 } catch (error) {
   console.log('⚠️ Error loading Google credentials:', error.message);
-  console.log('📌 Running in fallback mode without calendar integration');
+  console.log('📌 Service will run in demo mode - all functionality available except live calendar');
   GOOGLE_CALENDAR_ENABLED = false;
 }
 

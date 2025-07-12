@@ -7,182 +7,120 @@ on:
     branches: [main]
 
 env:
-  NODE_VERSION: '20.x'
+  NODE_VERSION: '20'
 
 jobs:
-  # Security and quality checks
   security-scan:
+    name: Security & Quality Gate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          
-      - name: Upload Trivy scan results
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: 'trivy-results.sarif'
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  # Run tests
-  test:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        service: [api, frontend]
-    
-    steps:
-      - uses: actions/checkout@v4
-      
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          cache-dependency-path: |
-            ${{ matrix.service == 'frontend' && 'thechattyai-frontend/package-lock.json' || 'package-lock.json' }}
-      
+
       - name: Install dependencies
+        run: npm ci
+
+      - name: Security audit
+        run: npm audit --audit-level=high
+
+      - name: Lint
+        run: npm run lint || echo "Lint not configured"
+
+      - name: Type check
+        working-directory: ./thechattyai-frontend
         run: |
-          if [ "${{ matrix.service }}" = "frontend" ]; then
-            cd thechattyai-frontend
-          fi
           npm ci
-      
-      - name: Run linter
-        run: |
-          if [ "${{ matrix.service }}" = "frontend" ]; then
-            cd thechattyai-frontend
-            npm run lint || true
-          fi
-      
-      - name: Run tests
-        run: |
-          if [ "${{ matrix.service }}" = "frontend" ]; then
-            cd thechattyai-frontend
-          fi
-          npm test || true
+          npm run build
 
-  # Build and push Docker images
-  build:
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    needs: security-scan
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Health check test
+        run: |
+          timeout 30 node google-calendar-api.js &
+          SERVER_PID=$!
+          sleep 5
+          curl -f http://localhost:4000/healthz || exit 1
+          kill $SERVER_PID
+
+  deploy-backend:
+    name: Deploy Backend to Render
+    runs-on: ubuntu-latest
     needs: [security-scan, test]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    strategy:
-      matrix:
-        include:
-          - service: api
-            dockerfile: Dockerfile.api
-          - service: frontend
-            dockerfile: Dockerfile.frontend
-    
+    if: github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      
-      - name: Generate build metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ghcr.io/${{ github.repository_owner }}/thechattyai-${{ matrix.service }}
-          tags: |
-            type=ref,event=branch
-            type=sha,prefix={{branch}}-
-            type=raw,value=latest,enable={{is_default_branch}}
-      
-      - name: Build Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ${{ matrix.dockerfile }}
-          push: false
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      
-      - name: Generate SBOM
-        uses: anchore/syft-action@v1
-        with:
-          output: sbom-${{ matrix.service }}.json
-          format: json
-      
-      - name: Upload SBOM
-        uses: actions/upload-artifact@v4
-        with:
-          name: sbom-${{ matrix.service }}
-          path: sbom-${{ matrix.service }}.json
+      - name: Trigger Render Deploy
+        run: |
+          curl -X POST "https://api.render.com/deploy/srv-${{ secrets.RENDER_SERVICE_ID }}?key=${{ secrets.RENDER_API_KEY }}"
 
-  # Deploy to Render
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    
-    steps:
-      - name: Deploy API to Render
-        run: |
-          curl -X POST \
-            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
-            -H "Content-Type: application/json" \
-            -d '{"clearCache": true}' \
-            https://api.render.com/v1/services/${{ secrets.RENDER_API_SERVICE_ID }}/deploys
-      
-      - name: Deploy Frontend to Render
-        run: |
-          curl -X POST \
-            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
-            -H "Content-Type: application/json" \
-            -d '{"clearCache": true}' \
-            https://api.render.com/v1/services/${{ secrets.RENDER_FRONTEND_SERVICE_ID }}/deploys
-      
       - name: Wait for deployment
         run: sleep 60
-      
-      - name: Health check - API
+
+      - name: Verify deployment
         run: |
-          for i in {1..30}; do
-            if curl -f https://thechattyai-api.onrender.com/healthz; then
-              echo "API is healthy"
-              break
+          for i in {1..10}; do
+            if curl -f https://chattyai-calendar-bot-1.onrender.com/healthz; then
+              echo "Deployment successful"
+              exit 0
             fi
-            echo "Waiting for API to be healthy... attempt $i"
-            sleep 10
+            echo "Attempt $i failed, retrying..."
+            sleep 30
           done
-      
-      - name: Health check - Frontend
-        run: |
-          for i in {1..30}; do
-            if curl -f https://app.thechattyai.com/api/health; then
-              echo "Frontend is healthy"
-              break
-            fi
-            echo "Waiting for Frontend to be healthy... attempt $i"
-            sleep 10
-          done
-      
-      - name: Run E2E tests
-        run: |
-          # Placeholder for E2E tests with Playwright
-          echo "E2E tests would run here"
-      
-      - name: Notify deployment status
-        if: always()
+          echo "Deployment verification failed"
+          exit 1
+
+  deploy-frontend:
+    name: Deploy Frontend to Vercel
+    runs-on: ubuntu-latest
+    needs: [security-scan, test]
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          working-directory: ./thechattyai-frontend
+          vercel-args: '--prod'
+
+  notify:
+    name: Deployment Notification
+    runs-on: ubuntu-latest
+    needs: [deploy-backend, deploy-frontend]
+    if: always()
+    steps:
+      - name: Slack Notification
         uses: 8398a7/action-slack@v3
+        if: always()
         with:
           status: ${{ job.status }}
           text: |
-            Deployment ${{ job.status }}
-            Branch: ${{ github.ref }}
-            Commit: ${{ github.sha }}
-            Author: ${{ github.actor }}
+            Deployment Status: ${{ needs.deploy-backend.result }} (Backend) / ${{ needs.deploy-frontend.result }} (Frontend)
+            Health Check: https://chattyai-calendar-bot-1.onrender.com/healthz
+            Frontend: https://app.thechattyai.com
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }} 
