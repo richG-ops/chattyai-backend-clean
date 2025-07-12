@@ -58,6 +58,16 @@ app.use(cors({
 // Trust proxy for accurate IP addresses
 app.set('trust proxy', true);
 
+// Health check endpoint
+app.get('/healthz', (req, res) => {
+  res.status(200).json({
+    status: 'healthy',
+    service: 'thechattyai-calendar-api',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+});
+
 const SCOPES = ['https://www.googleapis.com/auth/calendar'];
 const TOKEN_PATH = 'token.json';
 
@@ -977,6 +987,8 @@ app.post('/vapi-webhook', authMiddleware, async (req, res) => {
           { question: functionName, ...parameters }
         );
         result = { response: personalityResponse.response };
+
+        
     }
     
     res.json(result);
@@ -993,6 +1005,46 @@ app.post('/vapi-webhook', authMiddleware, async (req, res) => {
     res.json({ response: errorResponse.response });
   }
 });
+
+// Helper function to get available slots
+async function getAvailableSlots(date, timePreference) {
+  try {
+    // Create a calendar instance for this request
+    const calendar = google.calendar({ version: 'v3', auth: oAuth2Client });
+    
+    const now = new Date();
+    const weekLater = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    const freebusy = await calendar.freebusy.query({
+      requestBody: {
+        timeMin: now.toISOString(),
+        timeMax: weekLater.toISOString(),
+        timeZone: 'America/Los_Angeles',
+        items: [{ id: 'primary' }],
+      },
+    });
+
+    const busy = freebusy.data.calendars.primary.busy;
+    let slots = [];
+    let slotStart = new Date(now);
+    
+    while (slots.length < 10 && slotStart < weekLater) {
+      let slotEnd = new Date(slotStart.getTime() + 30 * 60 * 1000);
+      const overlap = busy.some(b =>
+        new Date(b.start) < slotEnd && new Date(b.end) > slotStart
+      );
+      if (!overlap && slotEnd <= weekLater) {
+        slots.push({ start: slotStart.toISOString(), end: slotEnd.toISOString() });
+      }
+      slotStart = new Date(slotStart.getTime() + 30 * 60 * 1000);
+    }
+    
+    return slots;
+  } catch (error) {
+    console.error('Error getting available slots:', error);
+    return [];
+  }
+}
 
 // Vapi helper functions with AI Personality Integration
 async function handleCheckAvailability(params, aiEmployee = 'luna') {
@@ -1112,6 +1164,7 @@ async function handleBookAppointment(params, aiEmployee = 'luna') {
     };
     
     // Book the appointment
+    const calendar = google.calendar({ version: 'v3', auth: oAuth2Client });
     const result = await calendar.events.insert({
       calendarId: 'primary',
       resource: event
@@ -1460,7 +1513,8 @@ app.listen(PORT, () => {
   console.log('🚀 TheChattyAI Calendar API - PRODUCTION READY');
   console.log('='.repeat(60));
   console.log(`📡 Server running on port ${PORT}`);
-  console.log(`🌐 Health check: http://localhost:${PORT}/health`);
+  console.log(`🌐 Health check: http://localhost:${PORT}/healthz`);
+  console.log(`🎙️ Vapi webhook: http://localhost:${PORT}/vapi-webhook`);
   console.log(`📊 Test connection: http://localhost:${PORT}/api/test/connection`);
   console.log(`🔑 JWT Authentication: ${process.env.JWT_SECRET ? 'CONFIGURED' : 'USING DEFAULT'}`);
   console.log(`📅 Google Calendar: ${oAuth2Client.credentials.access_token ? 'AUTHENTICATED' : 'NEEDS AUTH'}`);
