@@ -1336,10 +1336,10 @@ async function handleBookAppointment(params, aiEmployee = 'luna') {
           `🚨 NEW BOOKING ALERT! 👩‍💼\n\nCustomer: ${customerName}\nPhone: ${customerPhone}\nService: ${serviceType}\nTime: ${confirmationTime}\n\nBooked by Luna AI ✨\nCalendar event created!`
         );
         
-        // Send SMS confirmation to customer with Luna branding + visual link
+        // Send SMS confirmation to customer with Luna branding + emoji art
         if (customerPhone) {
           await sendSMS(customerPhone,
-            `Hi ${customerName}! Your ${serviceType} appointment is confirmed for ${confirmationTime}. 👩‍💼\n\nConfirmation: ${result.data.id}\n\nWe'll see you then! ✨\n\n- Luna (your AI assistant)\n\n💫 See my smile: https://thechattyai.com/luna.gif\n📱 Meet me: https://app.thechattyai.com/meet-luna`
+            `Hi ${customerName}! Your ${serviceType} appointment is confirmed for ${confirmationTime}. 👩‍💼\n\nConfirmation: ${result.data.id}\n\nWe'll see you then! ✨\n\n    ✨ 👩‍💼 ✨\n   Luna AI Assistant\n\n💫 I'm here 24/7 to help!\n📱 Call me: 702-776-0084`
           );
         }
       } catch (smsError) {
