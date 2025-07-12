@@ -10,7 +10,7 @@ const https = require('https');
 const assert = require('assert');
 
 const config = {
-  apiUrl: process.env.API_URL || 'https://chattyai-calendar-bot-1.onrender.com',
+  apiUrl: process.env.API_URL || 'https://chattyai-backend-clean.onrender.com',
   frontendUrl: process.env.FRONTEND_URL || 'https://app.thechattyai.com',
   timeout: 10000,
   retries: 3

@@ -44,4 +44,4 @@ EXPOSE 4000
 # Run as non-root user
 USER nonroot
 
-CMD ["server-production.js"] 
+CMD ["server-minimal.js"] 
