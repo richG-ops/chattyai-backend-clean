@@ -1298,12 +1298,15 @@ async function handleBookAppointment(params, aiEmployee = 'luna') {
       description,
       start: {
         dateTime: appointmentDate.toISOString(),
-        timeZone: 'America/New_York'
+        timeZone: 'America/Los_Angeles'
       },
       end: {
         dateTime: endTime.toISOString(),
-        timeZone: 'America/New_York'
-      }
+        timeZone: 'America/Los_Angeles'
+      },
+      attendees: [
+        { email: 'richard.gallagherxyz@gmail.com' }
+      ]
     };
     
     // Book the appointment
@@ -1312,6 +1315,8 @@ async function handleBookAppointment(params, aiEmployee = 'luna') {
       calendarId: 'primary',
       resource: event
     });
+    
+    console.log('📅 Calendar event created:', result.data.htmlLink);
     
     if (result.data) {
       const confirmationTime = appointmentDate.toLocaleString('en-US', {
@@ -1331,10 +1336,10 @@ async function handleBookAppointment(params, aiEmployee = 'luna') {
           `🚨 NEW BOOKING ALERT! 👩‍💼\n\nCustomer: ${customerName}\nPhone: ${customerPhone}\nService: ${serviceType}\nTime: ${confirmationTime}\n\nBooked by Luna AI ✨\nCalendar event created!`
         );
         
-        // Send SMS confirmation to customer with Luna branding
+        // Send SMS confirmation to customer with Luna branding + visual link
         if (customerPhone) {
           await sendSMS(customerPhone,
-            `Hi ${customerName}! Your ${serviceType} appointment is confirmed for ${confirmationTime}. 👩‍💼\n\nConfirmation: ${result.data.id}\n\nWe'll see you then! ✨\n\n- Luna (your AI assistant)\n\n💫 Meet me: https://app.thechattyai.com/meet-luna`
+            `Hi ${customerName}! Your ${serviceType} appointment is confirmed for ${confirmationTime}. 👩‍💼\n\nConfirmation: ${result.data.id}\n\nWe'll see you then! ✨\n\n- Luna (your AI assistant)\n\n💫 See my smile: https://thechattyai.com/luna.gif\n📱 Meet me: https://app.thechattyai.com/meet-luna`
           );
         }
       } catch (smsError) {
@@ -1607,13 +1612,20 @@ function calculateEstimatedValue(businessType, currentSize) {
 // Helper function to parse natural language dates
 function parseNaturalDate(dateStr, timeStr) {
   try {
-    // Handle common date formats
-    const today = new Date();
-    let targetDate = new Date();
+    // FIXED: Use LA timezone and ensure 2025
+    const options = { timeZone: 'America/Los_Angeles' };
+    const today = new Date(new Date().toLocaleString('en-US', options));
+    
+    // Force year to 2025 if not specified
+    if (today.getFullYear() < 2025) {
+      today.setFullYear(2025);
+    }
+    
+    let targetDate = new Date(today);
     
     // Parse date
     if (dateStr.toLowerCase().includes('today')) {
-      targetDate = new Date();
+      targetDate = new Date(today);
     } else if (dateStr.toLowerCase().includes('tomorrow')) {
       targetDate = new Date(today.getTime() + 24 * 60 * 60 * 1000);
     } else if (dateStr.toLowerCase().includes('next monday')) {
@@ -1631,6 +1643,10 @@ function parseNaturalDate(dateStr, timeStr) {
       targetDate = new Date(dateStr);
       if (isNaN(targetDate.getTime())) {
         return null;
+      }
+      // Ensure 2025 if year not specified
+      if (targetDate.getFullYear() < 2025) {
+        targetDate.setFullYear(2025);
       }
     }
     
