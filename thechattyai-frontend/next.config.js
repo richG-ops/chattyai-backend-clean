@@ -1,15 +1,34 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone',
-  poweredByHeader: false,
-  compress: true,
   experimental: {
-    optimizeCss: true,
+    appDir: true,
   },
-  headers: async () => {
+  env: {
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'https://chattyai-calendar-bot-1.onrender.com',
+    NEXT_PUBLIC_APP_ENV: process.env.NODE_ENV || 'production',
+  },
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'avatars.githubusercontent.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'lh3.googleusercontent.com',
+      },
+    ],
+  },
+  // Performance optimizations
+  swcMinify: true,
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production',
+  },
+  // Security headers
+  async headers() {
     return [
       {
-        source: '/:path*',
+        source: '/(.*)',
         headers: [
           {
             key: 'X-Frame-Options',
@@ -24,10 +43,22 @@ const nextConfig = {
             value: '1; mode=block',
           },
           {
-            key: 'Strict-Transport-Security',
-            value: 'max-age=31536000; includeSubDomains',
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin',
           },
         ],
+      },
+    ];
+  },
+  // Output configuration for static deployment
+  output: 'standalone',
+  // Redirect configuration
+  async redirects() {
+    return [
+      {
+        source: '/health',
+        destination: '/api/health',
+        permanent: false,
       },
     ];
   },

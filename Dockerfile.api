@@ -44,4 +44,4 @@ EXPOSE 4000
 # Run as non-root user
 USER nonroot
 
-CMD ["google-calendar-api.js"] 
+CMD ["server-production.js"] 
