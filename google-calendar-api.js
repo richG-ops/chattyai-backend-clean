@@ -68,61 +68,90 @@ app.get('/healthz', (req, res) => {
   });
 });
 
+// Root endpoint for service discovery
+app.get('/', (req, res) => {
+  res.status(200).json({
+    name: 'TheChattyAI Calendar API',
+    version: '1.0.0',
+    status: 'live',
+    endpoints: {
+      health: '/healthz',
+      vapi_webhook: '/vapi-webhook', 
+      vapi_simple: '/vapi',
+      availability: '/get-availability',
+      booking: '/book-appointment'
+    },
+    timestamp: new Date().toISOString()
+  });
+});
+
 const SCOPES = ['https://www.googleapis.com/auth/calendar'];
 const TOKEN_PATH = 'token.json';
 
-// Load credentials from environment variable (Render) or local file (development)
+// Production-ready credential loading with fallback
 let CREDENTIALS;
+let oAuth2Client;
+let GOOGLE_CALENDAR_ENABLED = false;
+
 try {
   if (process.env.GOOGLE_CREDENTIALS) {
-    // Production: Use environment variable
     CREDENTIALS = JSON.parse(process.env.GOOGLE_CREDENTIALS);
     console.log('✅ Loaded credentials from environment variable');
+    GOOGLE_CALENDAR_ENABLED = true;
+  } else if (fs.existsSync('credentials.json')) {
+    CREDENTIALS = JSON.parse(fs.readFileSync('credentials.json'));
+    console.log('✅ Loaded credentials from local file');
+    GOOGLE_CALENDAR_ENABLED = true;
   } else {
-    // Development: Use local file
-    if (fs.existsSync('credentials.json')) {
-      CREDENTIALS = JSON.parse(fs.readFileSync('credentials.json'));
-      console.log('✅ Loaded credentials from local file');
+    console.log('⚠️ No Google credentials found - running in fallback mode');
+    console.log('📌 Set GOOGLE_CREDENTIALS environment variable to enable calendar features');
+  }
+
+  if (GOOGLE_CALENDAR_ENABLED && CREDENTIALS) {
+    const { client_secret, client_id, redirect_uris } = CREDENTIALS.installed || CREDENTIALS.web;
+    if (client_secret && client_id && redirect_uris) {
+      oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
+      console.log('✅ Google OAuth client initialized');
     } else {
-      console.error('❌ No credentials found!');
-      console.error('For production (Render): Set GOOGLE_CREDENTIALS environment variable');
-      console.error('For development: Create credentials.json file');
-      console.error('See DEPLOYMENT_GUIDE.md for setup instructions');
-      process.exit(1);
+      console.log('⚠️ Invalid credential structure - calendar features disabled');
+      GOOGLE_CALENDAR_ENABLED = false;
     }
   }
 } catch (error) {
-  console.error('❌ Error loading credentials:', error.message);
-  console.error('Make sure your credentials are valid JSON format');
-  process.exit(1);
+  console.log('⚠️ Error loading Google credentials:', error.message);
+  console.log('📌 Running in fallback mode without calendar integration');
+  GOOGLE_CALENDAR_ENABLED = false;
 }
 
-const { client_secret, client_id, redirect_uris } = CREDENTIALS.installed || CREDENTIALS.web;
-const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
+// Add debug logging for credentials  
+if (GOOGLE_CALENDAR_ENABLED && CREDENTIALS) {
+  const { client_secret, client_id, redirect_uris } = CREDENTIALS.installed || CREDENTIALS.web;
+  console.log('📋 Google Calendar Status: ENABLED');
+  console.log(`Client ID: ${client_id ? client_id.substring(0, 20) + '...' : 'NOT FOUND'}`);
+  console.log(`Client Secret: ${client_secret ? '***hidden***' : 'NOT FOUND'}`);
+  console.log(`Redirect URIs: ${redirect_uris ? redirect_uris.join(', ') : 'NOT FOUND'}`);
+  console.log(`Credential Type: ${CREDENTIALS.web ? 'web' : CREDENTIALS.installed ? 'installed' : 'UNKNOWN'}`);
+} else {
+  console.log('📋 Google Calendar Status: DISABLED (no credentials)');
+}
 
-// Add debug logging for credentials
-console.log('📋 Credential Details:');
-console.log(`Client ID: ${client_id ? client_id.substring(0, 20) + '...' : 'NOT FOUND'}`);
-console.log(`Client Secret: ${client_secret ? '***hidden***' : 'NOT FOUND'}`);
-console.log(`Redirect URIs: ${redirect_uris ? redirect_uris.join(', ') : 'NOT FOUND'}`);
-console.log(`Credential Type: ${CREDENTIALS.web ? 'web' : CREDENTIALS.installed ? 'installed' : 'UNKNOWN'}`);
-
-// Function to load and set credentials with refresh handling
+// Production-ready token loading with fallback
 function loadAndSetCredentials() {
+  if (!GOOGLE_CALENDAR_ENABLED || !oAuth2Client) {
+    console.log('⚠️ Google Calendar disabled - skipping token loading');
+    return false;
+  }
+
   try {
     let tokens;
     if (process.env.GOOGLE_TOKEN) {
-      // Production: Use environment variable
       tokens = JSON.parse(process.env.GOOGLE_TOKEN);
       console.log('✅ Loaded token from environment variable');
     } else if (fs.existsSync(TOKEN_PATH)) {
-      // Development: Use local file
       tokens = JSON.parse(fs.readFileSync(TOKEN_PATH));
       console.log('✅ Loaded token from local file');
     } else {
-      console.log('⚠️ No token found - authentication required');
-      console.log('For production: Set GOOGLE_TOKEN environment variable');
-      console.log('For development: Visit /auth to authenticate');
+      console.log('⚠️ No token found - Google Calendar features limited');
       return false;
     }
     
@@ -134,10 +163,10 @@ function loadAndSetCredentials() {
       return refreshAccessToken();
     }
     
-    console.log('✅ Authentication successful');
+    console.log('✅ Google authentication successful');
     return true;
   } catch (error) {
-    console.error('❌ Error loading token:', error);
+    console.log('⚠️ Error loading token:', error.message);
     return false;
   }
 }
@@ -293,13 +322,25 @@ app.get('/auth/google/callback', authLimiter, async (req, res) => {
   }
 });
 
-// Initialize credentials
-loadAndSetCredentials();
+// Initialize credentials (non-blocking)
+if (GOOGLE_CALENDAR_ENABLED) {
+  loadAndSetCredentials();
+}
 
-// Middleware to ensure auth is always set
+// Production-ready auth middleware with fallback
 function ensureAuth(req, res, next) {
+  if (!GOOGLE_CALENDAR_ENABLED) {
+    return res.status(503).json({ 
+      error: 'Google Calendar integration not configured',
+      message: 'Calendar features are currently unavailable' 
+    });
+  }
+  
   if (!loadAndSetCredentials()) {
-    return res.status(500).json({ error: 'Not authenticated. Go to /auth first or set GOOGLE_TOKEN env var on Render.' });
+    return res.status(500).json({ 
+      error: 'Calendar authentication not configured',
+      message: 'Visit /auth to set up calendar integration' 
+    });
   }
   next();
 }
