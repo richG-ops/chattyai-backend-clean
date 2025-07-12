@@ -450,6 +450,46 @@ async function sendSMS(to, message) {
     }
 }
 
+// Send Email function
+async function sendEmail(to, subject, html, text) {
+    try {
+        if (!process.env.RESEND_API_KEY) {
+            console.log('📧 EMAIL SIMULATION (Resend not configured):');
+            console.log(`TO: ${to}`);
+            console.log(`SUBJECT: ${subject}`);
+            console.log(`BODY: ${text}`);
+            console.log('---');
+            return true;
+        }
+        
+        const response = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                from: 'TheChattyAI <noreply@thechattyai.com>',
+                to: [to],
+                subject: subject,
+                html: html,
+                text: text
+            })
+        });
+        
+        if (response.ok) {
+            console.log('✅ Email sent to:', to);
+            return true;
+        } else {
+            console.error('❌ Email error:', await response.text());
+            return false;
+        }
+    } catch (error) {
+        console.error('❌ Email error:', error);
+        return false;
+    }
+}
+
 // Parse natural language date/time
 function parseDateTime(date, time) {
     const today = new Date();
@@ -634,7 +674,47 @@ app.post('/vapi', async (req, res) => {
                 // Send SMS to customer
                 if (customerPhone) {
                     await sendSMS(customerPhone,
-                        `Hi ${customerName}! Your ${serviceType} appointment is confirmed for ${appointmentDate.toLocaleString()}.\n\nConfirmation: ${confirmationNumber}\n\nWe'll see you then!\n\n- TheChattyAI`
+                        `Hi ${customerName}! Your ${serviceType} appointment is confirmed for ${appointmentDate.toLocaleString()}.\n\nConfirmation: ${confirmationNumber}\n\nWe'll see you then! 👩‍💼\n\n- Luna (your AI assistant)\n\nMeet me: https://app.thechattyai.com/meet-luna`
+                    );
+                }
+                
+                // Send email confirmation to customer (if we have their email)
+                if (parameters.customerEmail) {
+                    const emailHtml = `
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                            <h2 style="color: #2563eb;">Appointment Confirmed! 🎉</h2>
+                            <p>Hi <strong>${customerName}</strong>,</p>
+                            <p>Your appointment has been successfully booked!</p>
+                            
+                            <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                                <h3 style="margin-top: 0; color: #374151;">Appointment Details:</h3>
+                                <p><strong>Service:</strong> ${serviceType}</p>
+                                <p><strong>Date & Time:</strong> ${appointmentDate.toLocaleString()}</p>
+                                <p><strong>Confirmation #:</strong> ${confirmationNumber}</p>
+                            </div>
+                            
+                            <p>We'll see you then!</p>
+                            <p style="color: #6b7280;">- TheChattyAI</p>
+                        </div>
+                    `;
+                    
+                    const emailText = `Hi ${customerName},
+
+Your appointment has been confirmed!
+
+Service: ${serviceType}
+Date & Time: ${appointmentDate.toLocaleString()}
+Confirmation #: ${confirmationNumber}
+
+We'll see you then!
+
+- TheChattyAI`;
+
+                    await sendEmail(
+                        parameters.customerEmail,
+                        `Appointment Confirmed - ${serviceType}`,
+                        emailHtml,
+                        emailText
                     );
                 }
                 
