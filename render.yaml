@@ -1,10 +1,17 @@
 services:
+  # API Service
   - type: web
-    name: chattyai-calendar-api
-    env: node
-    plan: starter
-    buildCommand: npm install
-    startCommand: npm start
+    name: thechattyai-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile.api
+    plan: standard
+    region: oregon
+    scaling:
+      minInstances: 2
+      maxInstances: 10
+      targetMemoryPercent: 85
+      targetCPUPercent: 75
+    healthCheckPath: /healthz
     envVars:
       - key: NODE_ENV
         value: production
@@ -14,17 +21,70 @@ services:
         generateValue: true
       - key: DATABASE_URL
         fromDatabase:
-          name: chattyai-calendar-db
+          name: thechattyai-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: thechattyai-cache
           property: connectionString
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
         sync: false
       - key: GOOGLE_REDIRECT_URI
+        value: https://thechattyai-api.onrender.com/oauth/callback
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_FROM_NUMBER
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: GOOGLE_CREDENTIALS
+        sync: false
+      - key: GOOGLE_TOKEN
         sync: false
 
+  # Frontend Service
+  - type: web
+    name: thechattyai-frontend
+    runtime: docker
+    dockerfilePath: ./Dockerfile.frontend
+    plan: standard
+    region: oregon
+    scaling:
+      minInstances: 2
+      maxInstances: 8
+      targetMemoryPercent: 80
+      targetCPUPercent: 70
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL
+        value: https://thechattyai-api.onrender.com
+      - key: NEXTAUTH_SECRET
+        generateValue: true
+      - key: NEXTAUTH_URL
+        value: https://app.thechattyai.com
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+
+  # Redis Cache
+  - type: redis
+    name: thechattyai-cache
+    plan: starter
+    region: oregon
+    maxmemoryPolicy: allkeys-lru
+
 databases:
-  - name: chattyai-calendar-db
-    databaseName: chattyai_calendar
-    user: chattyai_calendar_user
-    plan: starter 
+  - name: thechattyai-db
+    databaseName: thechattyai_production
+    user: thechattyai_user
+    plan: standard
+    region: oregon
+    postgresMajorVersion: 15 

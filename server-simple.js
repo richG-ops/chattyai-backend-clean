@@ -11,6 +11,63 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Health check endpoint
+app.get('/healthz', (req, res) => {
+    res.status(200).json({ 
+        status: 'healthy',
+        service: 'thechattyai-api',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime()
+    });
+});
+
+// Database health check
+app.get('/api/health/db', async (req, res) => {
+    try {
+        if (!db) {
+            return res.status(503).json({ status: 'unavailable', message: 'Database not configured' });
+        }
+        await db.raw('SELECT 1');
+        res.json({ 
+            status: 'healthy', 
+            message: 'Database connection successful',
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        res.status(503).json({ 
+            status: 'unhealthy', 
+            message: 'Database connection failed',
+            error: error.message 
+        });
+    }
+});
+
+// Redis cache health check
+app.get('/api/health/cache', async (req, res) => {
+    try {
+        const redis = require('redis');
+        const redisClient = redis.createClient({
+            url: process.env.REDIS_URL
+        });
+        
+        await redisClient.connect();
+        await redisClient.ping();
+        await redisClient.quit();
+        
+        res.json({ 
+            status: 'healthy', 
+            message: 'Redis connection successful',
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        res.status(503).json({ 
+            status: 'unhealthy', 
+            message: 'Redis connection failed',
+            error: error.message 
+        });
+    }
+});
+
 // Database connection (optional)
 let db = null;
 if (process.env.DATABASE_URL) {
