@@ -2,9 +2,9 @@
   "name": "thechattyai-calendar-bot",
   "version": "1.0.0",
   "description": "TheChattyAI Calendar Bot for Voice-Based Appointment Booking",
-  "main": "server-minimal.js",
+  "main": "google-calendar-api.js",
   "scripts": {
-    "start": "node server-minimal.js",
+    "start": "node google-calendar-api.js",
     "dev": "nodemon server-minimal.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
