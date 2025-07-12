@@ -1646,6 +1646,7 @@ app.listen(PORT, () => {
   console.log(`📡 Server running on port ${PORT}`);
   console.log(`🌐 Health check: http://localhost:${PORT}/healthz`);
   console.log(`🎙️ Vapi webhook: http://localhost:${PORT}/vapi-webhook`);
+  console.log(`🎙️ Vapi simple: http://localhost:${PORT}/vapi`);
   console.log(`📊 Test connection: http://localhost:${PORT}/api/test/connection`);
   console.log(`🔑 JWT Authentication: ${process.env.JWT_SECRET ? 'CONFIGURED' : 'USING DEFAULT'}`);
   console.log(`📅 Google Calendar: ${oAuth2Client.credentials.access_token ? 'AUTHENTICATED' : 'NEEDS AUTH'}`);
