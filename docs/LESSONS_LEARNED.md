@@ -4,10 +4,15 @@
 
 ### 🚨 CRITICAL PRODUCTION ISSUES (CURRENT)
 
-**Date: 2025-01-11**
-**Issue:** Health endpoints returning 404, DNS resolution failures
-**Impact:** Production monitoring broken, potential service unavailability
-**Root Cause:** URL inconsistency between render.yaml config and actual deployments
+**Date: 2025-01-11** 
+**Issue:** Voice agent calls not registering, /vapi endpoint 404
+**Impact:** Complete voice booking system down, customers can't book appointments
+**Root Cause:** Edited wrong file (server-simple.js) when production runs google-calendar-api.js
+
+**DEPLOYMENT LESSON:** Always check package.json "main" field before editing!
+- Production runs: google-calendar-api.js
+- I edited: server-simple.js  
+- Result: Changes never deployed to production
 
 **URLs Currently Failing:**
 - `https://chattyai-calendar-bot-1.onrender.com/healthz` → 404 Not Found

@@ -11,6 +11,14 @@ const authMiddleware = require('./middleware/auth');
 const { readLimiter, writeLimiter, authLimiter } = require('./middleware/rate-limit');
 const helmet = require('helmet');
 const jwt = require('jsonwebtoken');
+const twilio = require('twilio');
+
+// 📱 TWILIO SMS SETUP WITH LUNA BRANDING
+const twilioClient = twilio(
+  process.env.TWILIO_ACCOUNT_SID || 'YOUR_TWILIO_ACCOUNT_SID',
+  process.env.TWILIO_AUTH_TOKEN || 'YOUR_TWILIO_AUTH_TOKEN'
+);
+const TWILIO_FROM_NUMBER = process.env.TWILIO_FROM_NUMBER || '+1XXXXXXXXXX';
 
 const app = express();
 
@@ -1316,6 +1324,24 @@ async function handleBookAppointment(params, aiEmployee = 'luna') {
         hour12: true
       });
       
+      // 📱 SEND SMS NOTIFICATIONS WITH LUNA BRANDING
+      try {
+        // Send SMS alert to Richard
+        await sendSMS('7027760084', 
+          `🚨 NEW BOOKING ALERT! 👩‍💼\n\nCustomer: ${customerName}\nPhone: ${customerPhone}\nService: ${serviceType}\nTime: ${confirmationTime}\n\nBooked by Luna AI ✨\nCalendar event created!`
+        );
+        
+        // Send SMS confirmation to customer with Luna branding
+        if (customerPhone) {
+          await sendSMS(customerPhone,
+            `Hi ${customerName}! Your ${serviceType} appointment is confirmed for ${confirmationTime}. 👩‍💼\n\nConfirmation: ${result.data.id}\n\nWe'll see you then! ✨\n\n- Luna (your AI assistant)\n\n💫 Meet me: https://app.thechattyai.com/meet-luna`
+          );
+        }
+      } catch (smsError) {
+        console.error('SMS sending error:', smsError);
+        // Don't fail the booking if SMS fails
+      }
+      
       // Generate personality-specific success response
       const successResponse = responseCoordinator.generateResponse(
         aiEmployee,
@@ -1636,6 +1662,30 @@ function getNextWeekday(targetDay) {
   const daysUntilTarget = (targetDay - currentDay + 7) % 7;
   const nextDate = new Date(today.getTime() + daysUntilTarget * 24 * 60 * 60 * 1000);
   return nextDate;
+}
+
+// 📱 LUNA'S SMS MAGIC - PRODUCTION READY
+async function sendSMS(to, message) {
+  try {
+    if (!process.env.TWILIO_ACCOUNT_SID || process.env.TWILIO_ACCOUNT_SID === 'YOUR_TWILIO_ACCOUNT_SID') {
+      console.log('📱 SMS SIMULATION (Luna says: Twilio not configured):');
+      console.log(`TO: ${to}`);
+      console.log(`MESSAGE: ${message}`);
+      console.log('---');
+      return true;
+    }
+    
+    const result = await twilioClient.messages.create({
+      body: message,
+      from: TWILIO_FROM_NUMBER,
+      to: to
+    });
+    console.log('✅ Luna sent SMS:', result.sid);
+    return true;
+  } catch (error) {
+    console.error('❌ Luna SMS error:', error);
+    return false;
+  }
 }
 
 // =============================================================================
