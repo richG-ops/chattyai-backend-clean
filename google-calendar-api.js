@@ -1339,7 +1339,7 @@ async function handleBookAppointment(params, aiEmployee = 'luna') {
         // Send SMS confirmation to customer with Luna branding + emoji art
         if (customerPhone) {
           await sendSMS(customerPhone,
-            `Hi ${customerName}! Your ${serviceType} appointment is confirmed for ${confirmationTime}. 👩‍💼\n\nConfirmation: ${result.data.id}\n\nWe'll see you then! ✨\n\n    ✨ 👩‍💼 ✨\n   Luna AI Assistant\n\n💫 I'm here 24/7 to help!\n📱 Call me: 702-776-0084`
+            `Hi ${customerName}! Your ${serviceType} appointment is confirmed for ${confirmationTime}. 👩‍💼\n\nConfirmation: ${result.data.id}\n\nWe'll see you then! ✨\n\n    ✨ 👩‍💼 ✨\n   Luna AI Assistant\n\n💫 Meet Luna: https://luna-visual-server.onrender.com\n📱 Call me: 702-776-0084`
           );
         }
       } catch (smsError) {
