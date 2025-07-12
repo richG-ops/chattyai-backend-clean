@@ -1,3 +1,7 @@
+// TheChattyAI Calendar Bot - Enhanced with AI Personalities
+// Last Updated: 2025-01-11 - FORCE REDEPLOY FIX
+// This server provides Google Calendar integration with voice AI personalities
+
 const express = require('express');
 const { google } = require('googleapis');
 const bodyParser = require('body-parser');
