@@ -1081,7 +1081,18 @@ app.post('/vapi-webhook', async (req, res) => {
   try {
     const { function: functionName, parameters, aiEmployee = 'luna' } = req.body;
     
-    console.log('🎙️ Vapi webhook called:', { functionName, parameters, aiEmployee });
+    // ENHANCED LOGGING FOR DEBUGGING
+    console.log('🎯 VAPI WEBHOOK CALLED - DETAILED DEBUG:', {
+      timestamp: new Date().toISOString(),
+      functionName,
+      aiEmployee,
+      parameters: JSON.stringify(parameters, null, 2),
+      headers: {
+        'content-type': req.headers['content-type'],
+        'user-agent': req.headers['user-agent']
+      },
+      fullBody: JSON.stringify(req.body, null, 2)
+    });
     
     let result;
     switch (functionName) {
@@ -1090,6 +1101,15 @@ app.post('/vapi-webhook', async (req, res) => {
         break;
         
       case 'bookAppointment':
+        // LOG CRITICAL PARAMETERS
+        console.log('📱 BOOKING ATTEMPT:', {
+          hasCustomerName: !!parameters.customerName,
+          hasCustomerPhone: !!parameters.customerPhone,
+          hasCustomerEmail: !!parameters.customerEmail,
+          hasDate: !!parameters.date,
+          hasTime: !!parameters.time,
+          actualParams: parameters
+        });
         result = await handleBookAppointment(parameters, aiEmployee);
         break;
         
@@ -1113,9 +1133,14 @@ app.post('/vapi-webhook', async (req, res) => {
           { question: functionName, ...parameters }
         );
         result = { response: personalityResponse.response };
-
-        
     }
+    
+    console.log('✅ VAPI WEBHOOK RESPONSE:', {
+      timestamp: new Date().toISOString(),
+      functionName,
+      responseLength: JSON.stringify(result).length,
+      hasData: !!result.data
+    });
     
     res.json(result);
   } catch (error) {
