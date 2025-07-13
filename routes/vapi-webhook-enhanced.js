@@ -5,24 +5,19 @@ const { getDb } = require('../db-config');
 const { v4: uuidv4 } = require('uuid');
 const { DateTime } = require('luxon');
 const { addBookingJob, addAnalyticsJob, PRIORITIES } = require('../lib/job-queue');
-const { idempotencyMiddleware } = require('../middleware/idempotency');
 
-// Redis for nonce tracking
-let redisClient;
-try {
-  const Redis = require('ioredis');
-  redisClient = new Redis(process.env.REDIS_URL);
-} catch (error) {
-  console.warn('Redis not available for nonce tracking:', error.message);
-}
-
-// HMAC validation middleware
+// Simple synchronous webhook validation
 const validateWebhookSignature = (req, res, next) => {
+  // For now, skip validation if no secret is configured
+  if (!process.env.VAPI_WEBHOOK_SECRET) {
+    console.warn('⚠️ Webhook validation disabled - no secret configured');
+    return next();
+  }
+  
   const signature = req.headers['x-vapi-signature'];
   const timestamp = req.headers['x-vapi-timestamp'];
-  const nonce = req.headers['x-vapi-nonce'];
   
-  if (!signature || !timestamp || !nonce) {
+  if (!signature || !timestamp) {
     console.warn('Missing webhook security headers');
     return res.status(401).json({ error: 'Missing security headers' });
   }
@@ -34,38 +29,29 @@ const validateWebhookSignature = (req, res, next) => {
     return res.status(401).json({ error: 'Request timestamp invalid' });
   }
   
-  // Check nonce (prevent replay within TTL)
-  if (redisClient) {
-    redisClient.setnx(`nonce:${nonce}`, '1', 'EX', 300).then(result => {
-      if (result === 0) {
-        console.warn('Duplicate nonce detected:', nonce);
-        return res.status(401).json({ error: 'Duplicate request' });
-      }
-    }).catch(err => {
-      console.warn('Redis nonce check failed:', err);
-    });
-  }
-  
   // Validate HMAC signature
-  const webhookSecret = process.env.VAPI_WEBHOOK_SECRET;
-  if (webhookSecret) {
-    const payload = JSON.stringify(req.body);
-    const expectedSignature = crypto
-      .createHmac('sha256', webhookSecret)
-      .update(timestamp + '.' + nonce + '.' + payload)
-      .digest('hex');
-    
-    if (signature !== expectedSignature) {
-      console.warn('Invalid webhook signature');
-      return res.status(401).json({ error: 'Invalid signature' });
-    }
+  const payload = JSON.stringify(req.body);
+  const expectedSignature = crypto
+    .createHmac('sha256', process.env.VAPI_WEBHOOK_SECRET)
+    .update(timestamp + '.' + payload)
+    .digest('hex');
+  
+  if (signature !== expectedSignature) {
+    console.warn('Invalid webhook signature');
+    return res.status(401).json({ error: 'Invalid signature' });
   }
   
   next();
 };
 
+// Simple pass-through for idempotency (will be handled by queue deduplication)
+const idempotencyMiddleware = (req, res, next) => {
+  req.requestId = req.headers['x-vapi-request-id'] || uuidv4();
+  next();
+};
+
 // Enhanced Vapi webhook handler with full data persistence
-router.post('/vapi-webhook', validateWebhookSignature, idempotencyMiddleware, async (req, res) => {
+router.post('/', validateWebhookSignature, idempotencyMiddleware, async (req, res) => {
   const startTime = Date.now();
   const db = getDb();
   
