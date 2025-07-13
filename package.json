@@ -1,19 +1,20 @@
 {
   "name": "thechattyai-calendar-bot",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "TheChattyAI Calendar Bot for Voice-Based Appointment Booking",
   "main": "google-calendar-api.js",
   "scripts": {
     "start": "node index.js",
     "start:legacy": "node google-calendar-api.js",
     "dev": "nodemon index.js",
-    "test": "mocha tests/**/*.test.js --timeout 10000",
+    "test": "echo \"Error: no test specified\" && exit 1",
     "test:watch": "mocha tests/**/*.test.js --watch",
     "lint": "eslint .",
     "migrate": "knex migrate:latest",
     "migrate:rollback": "knex migrate:rollback",
     "migrate:status": "knex migrate:status",
-    "smoke-test": "node -e \"require('./index'); console.log('✅ Smoke test passed - all routes loaded')\" && exit",
+    "smoke-test": "node tests/smoke-test.js",
+    "deploy": "git push origin main",
     "prestart": "npm run smoke-test"
   },
   "dependencies": {
