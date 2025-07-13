@@ -64,8 +64,9 @@ app.use('/api/v1/*', async (req, res, next) => {
 // Mount routes - each route file is self-contained
 try {
   app.use('/api/v1/webhook', require('./routes/vapi-webhook-enhanced'));
-  app.use('/api/monitoring', require('./routes/monitoring-dashboard'));
-  app.use('/vapi', require('./routes/vapi-simple')); // Legacy endpoint
+  app.use('/api/monitoring', require('./routes/monitoring'));
+  // Legacy Vapi endpoint for backwards compatibility
+  app.use('/vapi', require('./routes/vapi-webhook-enhanced'));
   
   console.log('✅ All routes loaded successfully');
 } catch (error) {
