@@ -16,14 +16,21 @@ const twilio = require('twilio');
 // 📧 EMAIL NOTIFICATION SETUP
 const nodemailer = require('nodemailer');
 
-// Create email transporter - FIXED: Using correct environment variables
-const emailTransporter = nodemailer.createTransporter({
-  service: 'gmail',
-  auth: {
-    user: process.env.GMAIL_USER || process.env.EMAIL_USER || 'richard.gallagherxyz@gmail.com',
-    pass: process.env.GMAIL_APP_PASSWORD || process.env.EMAIL_PASS || 'fallback-password'
+// Create email transporter function (lazy loading)
+function createEmailTransporter() {
+  try {
+    return nodemailer.createTransporter({
+      service: 'gmail',
+      auth: {
+        user: process.env.GMAIL_USER || process.env.EMAIL_USER || 'richard.gallagherxyz@gmail.com',
+        pass: process.env.GMAIL_APP_PASSWORD || process.env.EMAIL_PASS || 'fallback-password'
+      }
+    });
+  } catch (error) {
+    console.error('Error creating email transporter:', error);
+    return null;
   }
-});
+}
 
 // 📱 TWILIO SMS SETUP WITH LUNA BRANDING
 const twilioClient = twilio(
@@ -1768,6 +1775,13 @@ async function sendEmail(to, subject, html, text) {
       console.log('🚨 CRITICAL: Set GMAIL_USER and GMAIL_APP_PASSWORD in Render environment');
       console.log('---');
       return true;
+    }
+
+    // Create transporter within the function
+    const emailTransporter = createEmailTransporter();
+    if (!emailTransporter) {
+      console.log('📧 EMAIL ERROR: Could not create transporter');
+      return false;
     }
 
     const mailOptions = {
