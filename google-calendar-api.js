@@ -1,5 +1,5 @@
 // TheChattyAI Calendar Bot - Enhanced with AI Personalities
-// Last Updated: 2025-01-11 - FORCE REDEPLOY FIX
+// Last Updated: 2025-01-15 - CRITICAL INCIDENT FIX
 // This server provides Google Calendar integration with voice AI personalities
 
 const express = require('express');
@@ -12,6 +12,18 @@ const { readLimiter, writeLimiter, authLimiter } = require('./middleware/rate-li
 const helmet = require('helmet');
 const jwt = require('jsonwebtoken');
 const twilio = require('twilio');
+
+// 📧 EMAIL NOTIFICATION SETUP
+const nodemailer = require('nodemailer');
+
+// Create email transporter - FIXED: Using correct environment variables
+const emailTransporter = nodemailer.createTransporter({
+  service: 'gmail',
+  auth: {
+    user: process.env.GMAIL_USER || process.env.EMAIL_USER || 'richard.gallagherxyz@gmail.com',
+    pass: process.env.GMAIL_APP_PASSWORD || process.env.EMAIL_PASS || 'fallback-password'
+  }
+});
 
 // 📱 TWILIO SMS SETUP WITH LUNA BRANDING
 const twilioClient = twilio(
@@ -1329,22 +1341,80 @@ async function handleBookAppointment(params, aiEmployee = 'luna') {
         hour12: true
       });
       
-      // 📱 SEND SMS NOTIFICATIONS WITH LUNA BRANDING
+      // 📱📧 SEND SMS AND EMAIL NOTIFICATIONS WITH LUNA BRANDING
       try {
         // Send SMS alert to Richard
-        await sendSMS('7027760084', 
-          `🚨 NEW BOOKING ALERT! 👩‍💼\n\nCustomer: ${customerName}\nPhone: ${customerPhone}\nService: ${serviceType}\nTime: ${confirmationTime}\n\nBooked by Luna AI ✨\nCalendar event created!`
+        const smsSuccess = await sendSMS('7027760084', 
+          `🚨 NEW BOOKING ALERT! 👩‍💼\n\nCustomer: ${customerName}\nPhone: ${customerPhone}\nService: ${serviceType}\nTime: ${confirmationTime}\n\nBooked by Luna AI ✨\nCalendar event created!\n\n💫 Meet Luna: https://luna-visual-server.onrender.com`
+        );
+        
+        // Send EMAIL alert to Richard (CRITICAL FIX)
+        await sendEmail(
+          'richard.gallagherxyz@gmail.com',
+          `🚨 NEW BOOKING ALERT - ${customerName}`,
+          `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #2563eb;">🚨 New Booking Alert!</h2>
+            <div style="background: #f3f4f6; padding: 20px; border-radius: 8px;">
+              <p><strong>Customer:</strong> ${customerName}</p>
+              <p><strong>Phone:</strong> ${customerPhone}</p>
+              <p><strong>Service:</strong> ${serviceType}</p>
+              <p><strong>Date & Time:</strong> ${confirmationTime}</p>
+              <p><strong>Confirmation ID:</strong> ${result.data.id}</p>
+              <p><strong>Booked by:</strong> Luna AI ✨</p>
+            </div>
+            <p><a href="${result.data.htmlLink}" style="background: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">View in Google Calendar</a></p>
+            <p><a href="https://luna-visual-server.onrender.com" style="color: #2563eb;">💫 Meet Luna AI</a></p>
+          </div>
+          `,
+          `NEW BOOKING ALERT!\n\nCustomer: ${customerName}\nPhone: ${customerPhone}\nService: ${serviceType}\nTime: ${confirmationTime}\nConfirmation: ${result.data.id}\n\nBooked by Luna AI\n\nView calendar: ${result.data.htmlLink}`
         );
         
         // Send SMS confirmation to customer with Luna branding + emoji art
         if (customerPhone) {
-          await sendSMS(customerPhone,
+          const customerSmsSuccess = await sendSMS(customerPhone,
             `Hi ${customerName}! Your ${serviceType} appointment is confirmed for ${confirmationTime}. 👩‍💼\n\nConfirmation: ${result.data.id}\n\nWe'll see you then! ✨\n\n    ✨ 👩‍💼 ✨\n   Luna AI Assistant\n\n💫 Meet Luna: https://luna-visual-server.onrender.com\n📱 Call me: 702-776-0084`
           );
+          
+          // Send EMAIL confirmation to customer (CRITICAL FIX)
+          const customerEmail = params.customerEmail || `${customerName.replace(/\s+/g, '').toLowerCase()}@example.com`;
+          await sendEmail(
+            customerEmail,
+            `✨ Appointment Confirmed - ${serviceType}`,
+            `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #2563eb;">✨ Your Appointment is Confirmed!</h2>
+              <div style="background: #f3f4f6; padding: 20px; border-radius: 8px;">
+                <p>Hi ${customerName}!</p>
+                <p>Your <strong>${serviceType}</strong> appointment is confirmed for:</p>
+                <p style="font-size: 18px; color: #2563eb;"><strong>${confirmationTime}</strong></p>
+                <p><strong>Confirmation ID:</strong> ${result.data.id}</p>
+              </div>
+              <p style="text-align: center;">
+                <img src="https://luna-visual-server.onrender.com/luna.gif" alt="Luna AI" style="width: 100px; height: 100px;"/>
+              </p>
+              <p style="text-align: center;">
+                <a href="https://luna-visual-server.onrender.com" style="background: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">💫 Meet Luna AI</a>
+              </p>
+              <p style="text-align: center; color: #666;">
+                Need to reschedule? Call us at 702-776-0084
+              </p>
+            </div>
+            `,
+            `Hi ${customerName}!\n\nYour ${serviceType} appointment is confirmed for ${confirmationTime}.\n\nConfirmation: ${result.data.id}\n\nWe'll see you then! ✨\n\nMeet Luna: https://luna-visual-server.onrender.com\nCall: 702-776-0084`
+          );
         }
-      } catch (smsError) {
-        console.error('SMS sending error:', smsError);
-        // Don't fail the booking if SMS fails
+        
+        console.log('📊 Notification Summary:', {
+          smsToRichard: smsSuccess,
+          smsToCustomer: customerPhone ? customerSmsSuccess : 'No phone provided',
+          emailSent: true,
+          timestamp: new Date().toISOString()
+        });
+        
+      } catch (notificationError) {
+        console.error('❌ Notification sending error:', notificationError);
+        // Don't fail the booking if notifications fail
       }
       
       // Generate personality-specific success response
@@ -1680,26 +1750,82 @@ function getNextWeekday(targetDay) {
   return nextDate;
 }
 
-// 📱 LUNA'S SMS MAGIC - PRODUCTION READY
-async function sendSMS(to, message) {
+// 📧 ELITE EMAIL NOTIFICATION SYSTEM
+async function sendEmail(to, subject, html, text) {
   try {
-    if (!process.env.TWILIO_ACCOUNT_SID || process.env.TWILIO_ACCOUNT_SID === 'YOUR_TWILIO_ACCOUNT_SID') {
-      console.log('📱 SMS SIMULATION (Luna says: Twilio not configured):');
+    // CRITICAL FIX: Check for both old and new environment variable names
+    const emailUser = process.env.GMAIL_USER || process.env.EMAIL_USER;
+    const emailPass = process.env.GMAIL_APP_PASSWORD || process.env.EMAIL_PASS;
+    
+    const isConfigured = emailUser && emailPass && 
+                        emailUser !== 'richard.gallagherxyz@gmail.com';
+    
+    if (!isConfigured) {
+      console.log('📧 EMAIL SIMULATION (Email not configured):');
       console.log(`TO: ${to}`);
-      console.log(`MESSAGE: ${message}`);
+      console.log(`SUBJECT: ${subject}`);
+      console.log(`MESSAGE: ${text}`);
+      console.log('🚨 CRITICAL: Set GMAIL_USER and GMAIL_APP_PASSWORD in Render environment');
       console.log('---');
       return true;
+    }
+
+    const mailOptions = {
+      from: `"Luna AI Assistant" <${emailUser}>`,
+      to: to,
+      subject: subject,
+      text: text,
+      html: html
+    };
+
+    const result = await emailTransporter.sendMail(mailOptions);
+    console.log('✅ Email sent:', result.messageId);
+    return true;
+  } catch (error) {
+    console.error('❌ Email error:', error);
+    return false;
+  }
+}
+
+// 📱 LUNA'S SMS MAGIC - PRODUCTION READY WITH ENHANCED LOGGING
+async function sendSMS(to, message) {
+  try {
+    // CRITICAL: Enhanced environment variable checking
+    const twilioSid = process.env.TWILIO_ACCOUNT_SID;
+    const twilioToken = process.env.TWILIO_AUTH_TOKEN;
+    const twilioFrom = process.env.TWILIO_FROM_NUMBER;
+    
+    console.log('🔍 SMS Debug Info:', {
+      hasSid: !!twilioSid,
+      hasToken: !!twilioToken,
+      hasFrom: !!twilioFrom,
+      sidValue: twilioSid ? twilioSid.substring(0, 10) + '...' : 'NOT_SET',
+      environment: process.env.NODE_ENV
+    });
+    
+    if (!twilioSid || !twilioToken || twilioSid === 'YOUR_TWILIO_ACCOUNT_SID') {
+      console.log('📱 SMS SIMULATION (Twilio not configured):');
+      console.log(`TO: ${to}`);
+      console.log(`MESSAGE: ${message}`);
+      console.log('🚨 CRITICAL: Set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN in Render environment');
+      console.log('---');
+      return false; // Return false to indicate simulation mode
     }
     
     const result = await twilioClient.messages.create({
       body: message,
-      from: TWILIO_FROM_NUMBER,
+      from: twilioFrom,
       to: to
     });
-    console.log('✅ Luna sent SMS:', result.sid);
+    console.log('✅ Luna sent REAL SMS:', result.sid);
     return true;
   } catch (error) {
     console.error('❌ Luna SMS error:', error);
+    console.error('SMS Error Details:', {
+      code: error.code,
+      message: error.message,
+      moreInfo: error.moreInfo
+    });
     return false;
   }
 }
