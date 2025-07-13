@@ -4,12 +4,15 @@ const crypto = require('crypto');
 const { getDb } = require('../db-config');
 const { v4: uuidv4 } = require('uuid');
 const { DateTime } = require('luxon');
-const { addBookingJob, addAnalyticsJob, PRIORITIES } = require('../lib/job-queue');
+const { addBookingJob, addAnalyticsJob, addNotificationJob, PRIORITIES } = require('../lib/job-queue');
 
-// Simple synchronous webhook validation
+// HMAC signature validation
 const validateWebhookSignature = (req, res, next) => {
-  // For now, skip validation if no secret is configured
+  // Skip validation if no secret configured (dev only)
   if (!process.env.VAPI_WEBHOOK_SECRET) {
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(401).json({ error: 'Webhook secret not configured' });
+    }
     console.warn('⚠️ Webhook validation disabled - no secret configured');
     return next();
   }
@@ -18,14 +21,12 @@ const validateWebhookSignature = (req, res, next) => {
   const timestamp = req.headers['x-vapi-timestamp'];
   
   if (!signature || !timestamp) {
-    console.warn('Missing webhook security headers');
     return res.status(401).json({ error: 'Missing security headers' });
   }
   
   // Check timestamp (prevent replay outside 5-minute window)
   const now = Math.floor(Date.now() / 1000);
   if (Math.abs(now - parseInt(timestamp)) > 300) {
-    console.warn('Webhook timestamp too old/future:', timestamp);
     return res.status(401).json({ error: 'Request timestamp invalid' });
   }
   
@@ -37,23 +38,154 @@ const validateWebhookSignature = (req, res, next) => {
     .digest('hex');
   
   if (signature !== expectedSignature) {
-    console.warn('Invalid webhook signature');
     return res.status(401).json({ error: 'Invalid signature' });
   }
   
   next();
 };
 
-// Simple pass-through for idempotency (will be handled by queue deduplication)
-const idempotencyMiddleware = (req, res, next) => {
-  req.requestId = req.headers['x-vapi-request-id'] || uuidv4();
-  next();
+// Elite idempotency implementation
+const idempotencyMiddleware = async (req, res, next) => {
+  const requestId = req.headers['x-vapi-request-id'] || 
+                   req.headers['x-request-id'] || 
+                   crypto.randomUUID();
+  
+  req.requestId = requestId;
+  const db = req.db || getDb();
+  
+  try {
+    // Try to insert - will fail if already exists
+    await db('processed_webhooks').insert({
+      request_id: requestId,
+      event_type: req.body.type || 'unknown'
+    });
+    
+    // New request - continue processing
+    next();
+  } catch (error) {
+    if (error.code === '23505') { // Unique violation
+      // Already processed - return cached response
+      const existing = await db('processed_webhooks')
+        .where('request_id', requestId)
+        .first();
+      
+      if (existing?.response) {
+        console.log(`🔁 Returning cached response for ${requestId}`);
+        return res.status(200).json(existing.response);
+      }
+      
+      // No cached response - return success
+      return res.status(200).json({ 
+        success: true, 
+        deduplicated: true,
+        message: 'Request already processed' 
+      });
+    }
+    
+    // Other error - continue but log
+    console.error('Idempotency check error:', error);
+    next();
+  }
+};
+
+// Helper: Extract structured Q&A pairs from transcript
+const extractQAPairs = (messages, callId, tenantId) => {
+  if (!messages || !Array.isArray(messages)) return [];
+  
+  const pairs = [];
+  let sequenceNumber = 0;
+  
+  for (let i = 0; i < messages.length - 1; i++) {
+    const current = messages[i];
+    const next = messages[i + 1];
+    
+    // Look for assistant question followed by user answer
+    if (current.role === 'assistant' && next.role === 'user') {
+      const question = current.text || current.content;
+      const answer = next.text || next.content;
+      
+      // Determine intent from question/answer content
+      const intent = determineIntent(question, answer);
+      
+      // Extract metadata (dates, phone numbers, etc.)
+      const metadata = extractMetadata(question, answer);
+      
+      pairs.push({
+        call_id: callId,
+        tenant_id: tenantId,
+        question,
+        answer,
+        sequence_number: sequenceNumber++,
+        intent,
+        metadata: JSON.stringify(metadata),
+        created_at: new Date()
+      });
+    }
+  }
+  
+  return pairs;
+};
+
+// Helper: Determine intent from Q&A content
+const determineIntent = (question, answer) => {
+  const q = (question || '').toLowerCase();
+  const a = (answer || '').toLowerCase();
+  
+  if (q.includes('appointment') || q.includes('book') || a.includes('appointment')) {
+    return 'booking';
+  } else if (q.includes('complaint') || q.includes('problem') || a.includes('unhappy')) {
+    return 'complaint';
+  } else if (q.includes('price') || q.includes('cost') || q.includes('how much')) {
+    return 'pricing';
+  } else if (q.includes('hours') || q.includes('open') || q.includes('when')) {
+    return 'hours';
+  } else if (q.includes('name') || q.includes('phone') || q.includes('email')) {
+    return 'contact_info';
+  }
+  
+  return 'general';
+};
+
+// Helper: Extract structured metadata from answers
+const extractMetadata = (question, answer) => {
+  const metadata = {};
+  
+  // Extract phone numbers
+  const phoneRegex = /\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g;
+  const phones = answer.match(phoneRegex);
+  if (phones) metadata.phone = phones[0];
+  
+  // Extract email
+  const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
+  const emails = answer.match(emailRegex);
+  if (emails) metadata.email = emails[0];
+  
+  // Extract dates
+  const dateRegex = /\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}|\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/gi;
+  const dates = answer.match(dateRegex);
+  if (dates) metadata.date = dates[0];
+  
+  // Extract times
+  const timeRegex = /\b\d{1,2}:\d{2}\s*(?:am|pm)|\b\d{1,2}\s*(?:am|pm)\b/gi;
+  const times = answer.match(timeRegex);
+  if (times) metadata.time = times[0];
+  
+  // Extract names (basic heuristic)
+  if (question.toLowerCase().includes('name')) {
+    const words = answer.split(' ').filter(w => w.length > 1);
+    if (words.length <= 3) {
+      metadata.name = answer.trim();
+    }
+  }
+  
+  return metadata;
 };
 
 // Enhanced Vapi webhook handler with full data persistence
 router.post('/', validateWebhookSignature, idempotencyMiddleware, async (req, res) => {
   const startTime = Date.now();
-  const db = getDb();
+  const db = req.db || getDb();
+  const tenantId = req.tenantId || req.body.tenantId || process.env.DEFAULT_TENANT_ID;
   
   try {
     const { 
@@ -70,14 +202,22 @@ router.post('/', validateWebhookSignature, idempotencyMiddleware, async (req, re
       type: type || 'function-call',
       functionName: functionName || functionCall?.name,
       callId: call?.id,
+      tenantId,
       timestamp: new Date().toISOString()
     });
     
     // Handle different webhook types
     if (type === 'end-of-call' && call) {
-      // Store call record with transcript
-      await handleEndOfCall(call, transcript);
-      return res.json({ success: true });
+      // Store call record with transcript and extract Q&A
+      await handleEndOfCall(call, transcript, tenantId, db);
+      
+      // Cache response for idempotency
+      const response = { success: true, message: 'Call ended successfully' };
+      await db('processed_webhooks')
+        .where('request_id', req.requestId)
+        .update({ response: JSON.stringify(response) });
+      
+      return res.json(response);
     }
     
     // Handle function calls
@@ -190,14 +330,13 @@ async function storeCallRecord(call, functionName, parameters) {
   }
 }
 
-// Handle end of call
-async function handleEndOfCall(call, transcript) {
-  const db = getDb();
-  
+// Handle end of call with Q&A extraction
+async function handleEndOfCall(call, transcript, tenantId, db) {
   try {
     const duration = call.endedAt && call.startedAt ? 
       Math.round((new Date(call.endedAt) - new Date(call.startedAt)) / 1000) : 0;
     
+    // Update call record
     await db('calls')
       .where('call_id', call.id)
       .update({
@@ -211,9 +350,53 @@ async function handleEndOfCall(call, transcript) {
         updated_at: new Date()
       });
     
+    // Extract and store Q&A pairs
+    if (transcript?.messages) {
+      const qaPairs = extractQAPairs(transcript.messages, call.id, tenantId);
+      
+      if (qaPairs.length > 0) {
+        await db.batchInsert('call_qa_pairs', qaPairs, 100);
+        console.log(`📝 Extracted ${qaPairs.length} Q&A pairs from call ${call.id}`);
+        
+        // Check if this was a booking intent
+        const bookingQA = qaPairs.find(qa => qa.intent === 'booking');
+        if (bookingQA) {
+          // Extract booking details from Q&A metadata
+          const metadata = JSON.parse(bookingQA.metadata || '{}');
+          if (metadata.name && metadata.phone) {
+            await addBookingJob({
+              callId: call.id,
+              tenantId,
+              customerName: metadata.name,
+              customerPhone: metadata.phone,
+              customerEmail: metadata.email,
+              date: metadata.date,
+              time: metadata.time,
+              source: 'vapi_qa_extraction'
+            }, { priority: PRIORITIES.HIGH });
+          }
+        }
+        
+        // Check for complaint intent
+        const complaintQA = qaPairs.find(qa => qa.intent === 'complaint');
+        if (complaintQA) {
+          await addNotificationJob('sms', {
+            to: process.env.OWNER_PHONE || '7027760084',
+            template: 'urgent_complaint',
+            data: {
+              callId: call.id,
+              phone: call.phoneNumber,
+              complaint: complaintQA.answer
+            }
+          }, { priority: PRIORITIES.CRITICAL });
+        }
+      }
+    }
+    
     console.log(`📞 Call ${call.id} ended. Duration: ${duration}s`);
   } catch (error) {
-    console.error('Failed to update call end:', error);
+    console.error('Failed to handle call end:', error);
+    throw error;
   }
 }
 

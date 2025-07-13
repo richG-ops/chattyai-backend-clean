@@ -3,12 +3,12 @@ services:
     name: chattyai-backend
     runtime: node
     region: oregon
-    plan: standard # For production readiness
+    plan: standard # Production tier
     buildCommand: |
       npm ci --production=false
+      npx knex migrate:latest --env production
       npm run smoke-test
     startCommand: |
-      npm run migrate || echo "Migration failed, continuing..."
       npm start
     healthCheckPath: /healthz
     envVars:
@@ -31,15 +31,73 @@ services:
         generateValue: true
       - key: DEFAULT_TENANT_ID
         value: "00000000-0000-0000-0000-000000000000"
+      - key: SENTRY_DSN
+        sync: false
+      - key: OWNER_PHONE
+        value: "7027760084"
+      - key: OWNER_EMAIL
+        value: "richard.gallagherxyz@gmail.com"
+      - key: CRITICAL_ALERTS_ENABLED
+        value: "true"
     autoDeploy: true
+    
+  # Background workers
+  - type: worker
+    name: chattyai-workers
+    runtime: node
+    region: oregon
+    plan: standard
+    buildCommand: npm ci --production=false
+    startCommand: |
+      node workers/index.js
+    envVars:
+      - fromGroup: chattyai-backend
+    
+  # DLQ processor (separate for monitoring)
+  - type: worker
+    name: chattyai-dlq
+    runtime: node
+    region: oregon
+    plan: starter # DLQ should be low volume
+    buildCommand: npm ci --production=false
+    startCommand: |
+      node workers/dlq-processor.js
+    envVars:
+      - fromGroup: chattyai-backend
+      - key: WORKER_HEALTH_PORT
+        value: 3001
     
 databases:
   - name: chattyai-db
     plan: standard # Paid tier for connection pooling
+    databaseName: chattyai_production
+    user: chattyai_user
     ipAllowList: [] # Allow connections from anywhere
+    postgresMajorVersion: 15
     
-  - name: chattyai-redis
-    type: redis
-    plan: standard # 256MB plan for 10x IOPS
+# Redis for job queues
+services:
+  - type: redis
+    name: chattyai-redis
+    plan: standard # 256MB RAM, 10x IOPS vs free tier
     ipAllowList: []
-    maxMemoryPolicy: allkeys-lru # Evict least recently used keys when full 
+    maxMemoryPolicy: allkeys-lru # Evict least recently used keys when full
+    
+# Cron jobs
+  - type: cron
+    name: cleanup-old-webhooks
+    runtime: node
+    schedule: "0 2 * * *" # 2 AM daily
+    buildCommand: npm ci --production=false
+    command: |
+      node -e "
+        const db = require('./db-config').getDb();
+        db('processed_webhooks')
+          .where('processed_at', '<', db.raw('NOW() - INTERVAL \\'7 days\\''))
+          .delete()
+          .then(count => console.log(\`Cleaned up \${count} old webhook records\`))
+          .then(() => process.exit(0))
+          .catch(err => { console.error(err); process.exit(1); });
+      "
+    envVars:
+      - fromGroup: chattyai-backend 
