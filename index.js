@@ -5,6 +5,43 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const Sentry = require('@sentry/node');
 const { getDb } = require('./db-config');
+const http = require('http');
+const server = http.createServer(app);
+const allowedOrigin = process.env.NODE_ENV === 'production'
+  ? process.env.FRONTEND_URL || 'https://your-vercel-frontend.vercel.app'
+  : '*';
+const io = require('socket.io')(server, {
+  cors: { origin: allowedOrigin, methods: ['GET', 'POST'] }
+});
+
+// Socket.io connection handling
+io.on('connection', (socket) => {
+  console.log('Dashboard client connected');
+  socket.on('join-tenant', (tenantId) => {
+    socket.join(tenantId); // Room per tenant for isolation
+  });
+  socket.on('disconnect', () => console.log('Dashboard disconnected'));
+});
+
+// Environment variable validation (fail fast if missing)
+const requiredEnvVars = [
+  'DATABASE_URL',
+  'JWT_SECRET',
+  'VAPI_API_KEY',
+  'TWILIO_ACCOUNT_SID',
+  'TWILIO_AUTH_TOKEN',
+  'TWILIO_FROM_NUMBER',
+  'GOOGLE_CREDENTIALS',
+  'GOOGLE_TOKEN',
+  'ASSEMBLYAI_API_KEY',
+  'DEEPGRAM_API_KEY',
+  'REDIS_URL'
+];
+const missingVars = requiredEnvVars.filter(key => !process.env[key]);
+if (missingVars.length > 0) {
+  console.error('Missing required environment variables:', missingVars.join(', '));
+  process.exit(1);
+}
 
 // Create app instance
 const app = express();
@@ -101,6 +138,9 @@ app.use((req, res) => {
 // Export for testing
 module.exports = app;
 
+// Export io for use in workers if needed
+module.exports.io = io;
+
 // Start server only if this file is run directly
 if (require.main === module) {
   const PORT = process.env.PORT || 8080;
@@ -130,7 +170,9 @@ if (require.main === module) {
   };
   
   smokeTest().then(() => {
-    const server = app.listen(PORT, () => {
+    // Replace app.listen with server.listen
+    // app.listen(PORT, () => {
+    server.listen(PORT, () => {
       console.log('='.repeat(60));
       console.log('🚀 ChattyAI Backend - ELITE PRODUCTION READY');
       console.log('='.repeat(60));

@@ -17,6 +17,7 @@ const jwt = require('jsonwebtoken');
 const twilio = require('twilio');
 const { DateTime } = require('luxon');
 const Sentry = require('@sentry/node');
+const { body, validationResult } = require('express-validator');
 
 // 🚨 Initialize Sentry for monitoring
 Sentry.init({ 

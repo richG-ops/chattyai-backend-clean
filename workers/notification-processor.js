@@ -3,6 +3,7 @@ const twilio = require('twilio');
 const nodemailer = require('nodemailer');
 const CircuitBreaker = require('opossum');
 const { twilioLimiter } = require('../utils/twilio-limiter');
+const { logAuditEvent } = require('../lib/job-queue'); // Import audit log helper
 
 // Initialize providers
 const twilioClient = twilio(
@@ -125,6 +126,13 @@ async function processNotification(job) {
       provider: result.provider,
       job_id: job.id
     });
+    // Audit log for notification sent
+    await logAuditEvent('notification_sent', data.to, {
+      type,
+      template: data.template,
+      provider: result.provider,
+      jobId: job.id
+    });
     
     return result;
     
@@ -140,38 +148,62 @@ async function processNotification(job) {
       error: error.message,
       job_id: job.id
     });
+    // Audit log for notification failure
+    await logAuditEvent('notification_failed', data.to, {
+      type,
+      template: data.template,
+      error: error.message,
+      jobId: job.id
+    });
     
     throw error;
   }
 }
 
-// Send SMS with fallback
+// Add opt-out compliance to SMS
+function appendOptOut(message) {
+  return message + '\nReply STOP to opt-out.';
+}
+
+// Enhanced sendSMS with retries and opt-out
 async function sendSMS(data) {
-  const { to, template, data: templateData } = data;
-  
-  // Generate message from template
-  const message = templates.sms[template]
+  const { to, template, data: templateData, confirmation } = data;
+  let message = templates.sms[template]
     ? templates.sms[template](templateData)
     : data.message;
-  
-  if (!message) {
-    throw new Error('No message content');
+  if (confirmation) {
+    message = `We heard your info as: ${JSON.stringify(confirmation)}. Reply YES to confirm or call us.`;
   }
-  
-  try {
-    // Try Twilio first (with rate limiting)
-    const result = await twilioCircuit.fire(to, message);
-    return { ...result, provider: 'twilio' };
-  } catch (twilioError) {
-    console.error('Twilio failed, trying fallback:', twilioError.message);
-    
-    // Fallback to AWS SNS or another provider
-    if (process.env.AWS_SNS_ENABLED === 'true') {
-      return await sendSMSViaAWS(to, message);
+  message = appendOptOut(message);
+  if (!message) throw new Error('No message content');
+
+  let attempts = 0;
+  const maxAttempts = 3;
+  let lastError;
+  while (attempts < maxAttempts) {
+    try {
+      // Send SMS with status callback for delivery tracking
+      const result = await twilioClient.messages.create({
+        body: message,
+        to: to,
+        from: process.env.TWILIO_FROM_NUMBER,
+        statusCallback: process.env.TWILIO_STATUS_CALLBACK_URL // Set this in env and Twilio dashboard
+      });
+      return { ...result, provider: 'twilio' };
+    } catch (twilioError) {
+      lastError = twilioError;
+      attempts++;
+      if (attempts >= maxAttempts) {
+        // Fallback to AWS SNS or another provider if enabled
+        if (process.env.AWS_SNS_ENABLED === 'true') {
+          return await sendSMSViaAWS(to, message);
+        }
+        throw twilioError;
+      }
+      await new Promise(res => setTimeout(res, 1000 * attempts)); // Exponential backoff
     }
-    
-    throw twilioError;
   }
+  throw lastError;
 }
 
 // Send SMS via Twilio (wrapped in circuit breaker)

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getDb } = require('../db-config');
 const { getQueueHealth } = require('../lib/job-queue');
+const { authenticate } = require('../middleware/auth'); // Added for GDPR endpoint
 
 // System health check endpoint
 router.get('/health', async (req, res) => {
@@ -264,6 +265,33 @@ router.get('/performance', async (req, res) => {
   } catch (error) {
     console.error('Performance metrics error:', error);
     res.status(500).json({ error: 'Failed to fetch performance metrics' });
+  }
+});
+
+// GDPR-compliant user data deletion endpoint
+// POST /delete-user-data { userId }
+router.post('/delete-user-data', authenticate, async (req, res) => {
+  const { userId } = req.body;
+  const db = getDb();
+  try {
+    await db.transaction(async (trx) => {
+      await trx('bookings').where('customer_id', userId).del();
+      await trx('calls').where('customer_id', userId).del();
+      await trx('customers').where('id', userId).del();
+      // Add more tables as needed (e.g., leads, call_qa_pairs)
+      await trx('call_qa_pairs').where('customer_id', userId).del();
+      await trx('notification_logs').where('recipient', userId).del();
+      // Audit log
+      await trx('audit_logs').insert({
+        action: 'gdpr_delete',
+        user_id: userId,
+        timestamp: new Date()
+      });
+    });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('GDPR delete error:', error);
+    res.status(500).json({ error: 'Failed to delete user data' });
   }
 });
 

@@ -2,7 +2,9 @@ const { getDb } = require('../db-config');
 const { v4: uuidv4 } = require('uuid');
 const { DateTime } = require('luxon');
 const googleCalendarApi = require('../google-calendar-api');
-const { addNotificationJob, addAnalyticsJob } = require('../lib/job-queue');
+const { addNotificationJob, addAnalyticsJob, logAuditEvent } = require('../lib/job-queue'); // Add this import
+const outboundQueue = require('./outbound-processor'); // Add this import
+const { io } = require('../index'); // Import io for real-time events
 
 // Process booking jobs
 const processBooking = async (job) => {
@@ -195,6 +197,39 @@ Booked via: ${data.aiEmployee || 'AI Assistant'}`,
       source: data.source,
       aiEmployee: data.aiEmployee
     });
+
+    // Audit log for booking creation
+    await logAuditEvent('booking_created', customer.id, {
+      bookingId: booking.booking_id,
+      serviceType: data.serviceType,
+      source: data.source
+    });
+
+    // Emit real-time event to dashboard (multi-tenant room)
+    if (io && data.tenantId) {
+      io.to(data.tenantId).emit('new-booking', {
+        bookingId: booking.booking_id,
+        customerName: data.customerName,
+        appointmentDate: appointmentDate.toISO(),
+        serviceType: data.serviceType
+      });
+    }
+
+    // 9. Outbound follow-up if booking not confirmed (customize logic as needed)
+    if (!booking || booking.status !== 'confirmed') {
+      if (data.customerPhone) {
+        await outboundQueue.add({
+          phone: data.customerPhone,
+          script: `Hi ${data.customerName}, following up from your call—let's schedule that appointment!`,
+          tenantId: data.tenantId
+        }, { delay: 60000 }); // 1min polite delay
+        // Audit log for outbound follow-up
+        await logAuditEvent('outbound_followup_queued', customer.id, {
+          phone: data.customerPhone,
+          tenantId: data.tenantId
+        });
+      }
+    }
     
     console.log(`✅ Booking ${booking.booking_id} processed successfully`);
     
