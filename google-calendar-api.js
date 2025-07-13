@@ -1,6 +1,9 @@
 // TheChattyAI Calendar Bot - Enhanced with AI Personalities
-// Last Updated: 2025-01-15 - CRITICAL INCIDENT FIX
+// Last Updated: 2025-01-16 - P0 CRITICAL FIXES APPLIED
 // This server provides Google Calendar integration with voice AI personalities
+
+// Load environment variables first
+require('dotenv').config();
 
 const express = require('express');
 const { google } = require('googleapis');
@@ -12,6 +15,21 @@ const { readLimiter, writeLimiter, authLimiter } = require('./middleware/rate-li
 const helmet = require('helmet');
 const jwt = require('jsonwebtoken');
 const twilio = require('twilio');
+const { DateTime } = require('luxon');
+const Sentry = require('@sentry/node');
+
+// 🚨 Initialize Sentry for monitoring
+Sentry.init({ 
+  dsn: process.env.SENTRY_DSN,
+  environment: process.env.NODE_ENV || 'development',
+  tracesSampleRate: 1.0,
+});
+
+// Import rate limiters
+const { twilioLimiter, emailLimiter } = require('./utils/twilio-limiter');
+
+// Import idempotency middleware
+const idempotencyMiddleware = require('./middleware/idempotency');
 
 // 📧 EMAIL NOTIFICATION SETUP
 const nodemailer = require('nodemailer');
@@ -41,6 +59,12 @@ const TWILIO_FROM_NUMBER = process.env.TWILIO_FROM_NUMBER || '+1XXXXXXXXXX';
 
 const app = express();
 
+// Sentry request handler must be first
+app.use(Sentry.Handlers.requestHandler());
+
+// Add Sentry tracing
+app.use(Sentry.Handlers.tracingHandler());
+
 // Security headers
 app.use(helmet({
   contentSecurityPolicy: {
@@ -62,6 +86,9 @@ app.use(helmet({
 // Request size limits
 app.use(bodyParser.json({ limit: '1mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '1mb' }));
+
+// Apply idempotency middleware for webhook endpoints
+app.use(idempotencyMiddleware);
 
 // CORS configuration
 app.use(cors({
@@ -1711,44 +1738,48 @@ function calculateEstimatedValue(businessType, currentSize) {
   return Math.round(baseValue * sizeMultiplier);
 }
 
-// Helper function to parse natural language dates
-function parseNaturalDate(dateStr, timeStr) {
+// Helper function to parse natural language dates with Luxon
+function parseNaturalDate(dateStr, timeStr, timezone = 'America/Los_Angeles') {
   try {
-    // FIXED: Use LA timezone and ensure 2025
-    const options = { timeZone: 'America/Los_Angeles' };
-    const today = new Date(new Date().toLocaleString('en-US', options));
-    
-    // Force year to 2025 if not specified
-    if (today.getFullYear() < 2025) {
-      today.setFullYear(2025);
-    }
-    
-    let targetDate = new Date(today);
+    // Get current time in the specified timezone
+    const now = DateTime.now().setZone(timezone);
+    let targetDate = now;
     
     // Parse date
-    if (dateStr.toLowerCase().includes('today')) {
-      targetDate = new Date(today);
-    } else if (dateStr.toLowerCase().includes('tomorrow')) {
-      targetDate = new Date(today.getTime() + 24 * 60 * 60 * 1000);
-    } else if (dateStr.toLowerCase().includes('next monday')) {
-      targetDate = getNextWeekday(1); // Monday
-    } else if (dateStr.toLowerCase().includes('next tuesday')) {
-      targetDate = getNextWeekday(2); // Tuesday
-    } else if (dateStr.toLowerCase().includes('next wednesday')) {
-      targetDate = getNextWeekday(3); // Wednesday
-    } else if (dateStr.toLowerCase().includes('next thursday')) {
-      targetDate = getNextWeekday(4); // Thursday
-    } else if (dateStr.toLowerCase().includes('next friday')) {
-      targetDate = getNextWeekday(5); // Friday
+    const dateLower = dateStr.toLowerCase();
+    if (dateLower.includes('today')) {
+      targetDate = now;
+    } else if (dateLower.includes('tomorrow')) {
+      targetDate = now.plus({ days: 1 });
+    } else if (dateLower.includes('next monday')) {
+      targetDate = getNextWeekdayLuxon(now, 1);
+    } else if (dateLower.includes('next tuesday')) {
+      targetDate = getNextWeekdayLuxon(now, 2);
+    } else if (dateLower.includes('next wednesday')) {
+      targetDate = getNextWeekdayLuxon(now, 3);
+    } else if (dateLower.includes('next thursday')) {
+      targetDate = getNextWeekdayLuxon(now, 4);
+    } else if (dateLower.includes('next friday')) {
+      targetDate = getNextWeekdayLuxon(now, 5);
     } else {
-      // Try to parse as a regular date
-      targetDate = new Date(dateStr);
-      if (isNaN(targetDate.getTime())) {
-        return null;
-      }
-      // Ensure 2025 if year not specified
-      if (targetDate.getFullYear() < 2025) {
-        targetDate.setFullYear(2025);
+      // Try to parse as ISO date or common formats
+      const parsed = DateTime.fromISO(dateStr, { zone: timezone });
+      if (parsed.isValid) {
+        targetDate = parsed;
+      } else {
+        // Try other formats
+        const formats = ['MM/dd/yyyy', 'MM-dd-yyyy', 'yyyy-MM-dd', 'MMMM d, yyyy'];
+        for (const format of formats) {
+          const attempt = DateTime.fromFormat(dateStr, format, { zone: timezone });
+          if (attempt.isValid) {
+            targetDate = attempt;
+            break;
+          }
+        }
+        if (!targetDate.isValid) {
+          console.error('Could not parse date:', dateStr);
+          return null;
+        }
       }
     }
     
@@ -1762,14 +1793,25 @@ function parseNaturalDate(dateStr, timeStr) {
       if (ampm === 'pm' && hours !== 12) hours += 12;
       if (ampm === 'am' && hours === 12) hours = 0;
       
-      targetDate.setHours(hours, minutes, 0, 0);
+      targetDate = targetDate.set({ hour: hours, minute: minutes, second: 0, millisecond: 0 });
     } else {
+      console.error('Could not parse time:', timeStr);
       return null;
     }
     
-    return targetDate;
+    // Ensure the date is in the future
+    if (targetDate < now) {
+      console.warn('Parsed date is in the past, adjusting to next occurrence');
+      targetDate = targetDate.plus({ days: 1 });
+    }
+    
+    // Return as JavaScript Date for compatibility
+    return targetDate.toJSDate();
   } catch (error) {
     console.error('Error parsing date:', error);
+    Sentry.captureException(error, {
+      extra: { dateStr, timeStr, timezone }
+    });
     return null;
   }
 }
@@ -1780,6 +1822,19 @@ function getNextWeekday(targetDay) {
   const daysUntilTarget = (targetDay - currentDay + 7) % 7;
   const nextDate = new Date(today.getTime() + daysUntilTarget * 24 * 60 * 60 * 1000);
   return nextDate;
+}
+
+// Helper function for Luxon date parsing
+function getNextWeekdayLuxon(currentDate, targetDay) {
+  const currentDay = currentDate.weekday;
+  let daysUntilTarget = (targetDay - currentDay + 7) % 7;
+  
+  // If it's the same day, move to next week
+  if (daysUntilTarget === 0) {
+    daysUntilTarget = 7;
+  }
+  
+  return currentDate.plus({ days: daysUntilTarget });
 }
 
 // 📧 ELITE EMAIL NOTIFICATION SYSTEM
@@ -1817,16 +1872,35 @@ async function sendEmail(to, subject, html, text) {
       html: html
     };
 
-    const result = await emailTransporter.sendMail(mailOptions);
+    // Apply rate limiting
+    const result = await emailLimiter.schedule(async () => {
+      return await emailTransporter.sendMail(mailOptions);
+    });
+    
     console.log('✅ Email sent:', result.messageId);
+    
+    // Track email metrics in Sentry
+    Sentry.addBreadcrumb({
+      message: 'Email sent successfully',
+      category: 'email',
+      data: { to, subject }
+    });
+    
     return true;
   } catch (error) {
     console.error('❌ Email error:', error);
+    
+    // Capture email errors in Sentry
+    Sentry.captureException(error, {
+      tags: { component: 'email' },
+      extra: { to, subject }
+    });
+    
     return false;
   }
 }
 
-// 📱 LUNA'S SMS MAGIC - PRODUCTION READY WITH ENHANCED LOGGING
+// 📱 LUNA'S SMS MAGIC - PRODUCTION READY WITH RATE LIMITING
 async function sendSMS(to, message) {
   try {
     // CRITICAL: Enhanced environment variable checking
@@ -1851,12 +1925,25 @@ async function sendSMS(to, message) {
       return false; // Return false to indicate simulation mode
     }
     
-    const result = await twilioClient.messages.create({
-      body: message,
-      from: twilioFrom,
-      to: to
+    // Apply rate limiting
+    const result = await twilioLimiter.schedule(async () => {
+      const response = await twilioClient.messages.create({
+        body: message,
+        from: twilioFrom,
+        to: to
+      });
+      return response;
     });
+    
     console.log('✅ Luna sent REAL SMS:', result.sid);
+    
+    // Track SMS metrics in Sentry
+    Sentry.addBreadcrumb({
+      message: 'SMS sent successfully',
+      category: 'sms',
+      data: { to, messageLength: message.length }
+    });
+    
     return true;
   } catch (error) {
     console.error('❌ Luna SMS error:', error);
@@ -1865,9 +1952,37 @@ async function sendSMS(to, message) {
       message: error.message,
       moreInfo: error.moreInfo
     });
+    
+    // Capture SMS errors in Sentry
+    Sentry.captureException(error, {
+      tags: { component: 'sms' },
+      extra: { to, messageLength: message.length }
+    });
+    
     return false;
   }
 }
+
+// Sentry error handler (must be after all other app.use() calls)
+app.use(Sentry.Handlers.errorHandler());
+
+// General error handler
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  
+  // Don't leak error details in production
+  if (process.env.NODE_ENV === 'production') {
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'An unexpected error occurred'
+    });
+  } else {
+    res.status(500).json({
+      error: err.message,
+      stack: err.stack
+    });
+  }
+});
 
 // =============================================================================
 // SERVER STARTUP
