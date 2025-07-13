@@ -1997,6 +1997,10 @@ app.use((err, req, res, next) => {
 // =============================================================================
 
 const PORT = process.env.PORT || 4000;
+// Start synthetic canary monitoring
+const SyntheticCanary = require('./lib/synthetic-canary');
+const canary = new SyntheticCanary();
+
 app.listen(PORT, () => {
   console.log('='.repeat(60));
   console.log('🚀 TheChattyAI Calendar API - PRODUCTION READY');
@@ -2012,4 +2016,11 @@ app.listen(PORT, () => {
   console.log('='.repeat(60));
   console.log('✅ Ready for production traffic!');
   console.log('='.repeat(60));
+  
+  // Start canary monitoring in production
+  if (process.env.NODE_ENV === 'production' && process.env.VAPI_API_KEY) {
+    setTimeout(() => {
+      canary.start();
+    }, 5000); // Wait 5 seconds for server to be fully ready
+  }
 });

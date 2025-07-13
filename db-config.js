@@ -24,6 +24,15 @@ const createDbConnection = () => {
       idleTimeoutMillis: 30000,
       reapIntervalMillis: 1000,
       createRetryIntervalMillis: 100,
+      afterCreate: function (conn, done) {
+        // Set up RLS context for tenant isolation
+        conn.query('SET app.tenant_id = $1', [process.env.DEFAULT_TENANT_ID || '00000000-0000-0000-0000-000000000000'], function (err) {
+          if (err) {
+            console.warn('Failed to set tenant context:', err);
+          }
+          done(err, conn);
+        });
+      },
     },
     migrations: { 
       directory: './migrations',
