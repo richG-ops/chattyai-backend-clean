@@ -31,6 +31,10 @@ const { twilioLimiter, emailLimiter } = require('./utils/twilio-limiter');
 // Import idempotency middleware
 const idempotencyMiddleware = require('./middleware/idempotency');
 
+// Import enhanced routes
+const vapiWebhookRouter = require('./routes/vapi-webhook-enhanced');
+const monitoringRouter = require('./routes/monitoring');
+
 // 📧 EMAIL NOTIFICATION SETUP
 const nodemailer = require('nodemailer');
 
@@ -636,6 +640,10 @@ app.post('/book-appointment', authMiddleware, writeLimiter, validateAppointment,
     });
   }
 });
+
+// Mount enhanced routes
+app.use('/', vapiWebhookRouter);  // This includes the enhanced /vapi-webhook
+app.use('/monitoring', monitoringRouter);
 
 // Health check endpoint (no rate limit)
 app.get('/health', (req, res) => {

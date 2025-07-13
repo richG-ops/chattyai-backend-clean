@@ -1,11 +1,12 @@
 const crypto = require('crypto');
+const { getDb } = require('../db-config');
 
-// Create knex instance (handle both dev and prod)
+// Get database instance with proper connection pooling
 let knex;
 try {
-  knex = require('knex')(require('../knexfile'));
+  knex = getDb();
 } catch (error) {
-  console.warn('Database not configured, idempotency disabled');
+  console.warn('Database not configured, idempotency disabled:', error.message);
   knex = null;
 }
 
