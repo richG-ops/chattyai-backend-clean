@@ -9,7 +9,7 @@ services:
       npx knex migrate:latest --env production
       npm run smoke-test
     startCommand: |
-      npm start
+      node google-calendar-api.js
     healthCheckPath: /healthz
     envVars:
       - key: NODE_ENV
