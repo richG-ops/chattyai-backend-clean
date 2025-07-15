@@ -1,1 +1,6 @@
-﻿# Deployment trigger 07/13/2025 17:05:07
+﻿FORCE DEPLOYMENT - WAKE UP CALL
+Timestamp: 2025-07-15 19:48 UTC
+Status: FORCING NEW DEPLOYMENT
+Issue: render.yaml changes not deployed after 35+ hours
+Action: Force trigger to get VAPI endpoint working
+Critical: System stuck on old code, customers can't book
