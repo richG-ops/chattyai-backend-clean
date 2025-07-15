@@ -642,8 +642,8 @@ app.post('/book-appointment', authMiddleware, writeLimiter, validateAppointment,
   }
 });
 
-// Mount enhanced routes
-app.use('/', vapiWebhookRouter);  // This includes the enhanced /vapi-webhook
+// Mount enhanced routes  
+app.use('/vapi-webhook', vapiWebhookRouter);  // Fixed: mount at specific path
 app.use('/monitoring', monitoringRouter);
 
 // Health check endpoint (no rate limit)
