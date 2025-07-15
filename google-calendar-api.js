@@ -1193,7 +1193,12 @@ app.post('/vapi-webhook', async (req, res) => {
   }
 });
 
-// Simple /vapi endpoint for compatibility (no auth required)
+// Test endpoint to verify route registration
+app.get('/test-route', (req, res) => {
+  res.json({ message: 'Route registration works!', timestamp: new Date().toISOString() });
+});
+
+// Simple /vapi endpoint for compatibility (no auth required)  
 app.post('/vapi', async (req, res) => {
   try {
     const { function: functionName, parameters } = req.body;
