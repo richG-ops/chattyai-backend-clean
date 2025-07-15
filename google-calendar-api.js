@@ -175,6 +175,14 @@ app.get('/healthz', (req, res) => {
   });
 });
 
+// EMERGENCY TEST: Route immediately after healthz
+app.get('/emergency-test', (req, res) => {
+  res.json({ 
+    message: 'EMERGENCY ROUTE WORKS - IMMEDIATELY AFTER HEALTHZ',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // DIAGNOSTIC: Test route next to healthz to isolate routing issue
 app.get('/diagnostic', (req, res) => {
   res.json({ 
