@@ -34,7 +34,18 @@ const idempotencyMiddleware = require('./middleware/idempotency');
 
 // Import enhanced routes
 const vapiWebhookRouter = require('./routes/vapi-webhook-enhanced');
-const monitoringRouter = require('./routes/monitoring');
+// Load monitoring router with error handling
+let monitoringRouter;
+try {
+  monitoringRouter = require('./routes/monitoring');
+  console.log('✅ Monitoring router loaded successfully');
+} catch (error) {
+  console.error('❌ Failed to load monitoring router:', error.message);
+  // Create a mock router that won't crash the app
+  const express = require('express');
+  monitoringRouter = express.Router();
+  monitoringRouter.get('/health', (req, res) => res.json({ status: 'monitoring_module_failed', error: error.message }));
+}
 
 // 📧 EMAIL NOTIFICATION SETUP
 const nodemailer = require('nodemailer');
@@ -653,9 +664,22 @@ app.post('/book-appointment', authMiddleware, writeLimiter, validateAppointment,
   }
 });
 
-// Mount enhanced routes  
-app.use('/vapi-webhook', vapiWebhookRouter);  // Fixed: mount at specific path
-app.use('/monitoring', monitoringRouter);
+// Mount enhanced routes with error handling
+try {
+  app.use('/vapi-webhook', vapiWebhookRouter);  // Fixed: mount at specific path
+  console.log('✅ VAPI webhook routes loaded successfully');
+} catch (error) {
+  console.error('❌ Failed to load VAPI webhook routes:', error.message);
+}
+
+try {
+  app.use('/monitoring', monitoringRouter);
+  console.log('✅ Monitoring routes loaded successfully');
+} catch (error) {
+  console.error('❌ Failed to load monitoring routes:', error.message);
+  // Continue without crashing - add fallback route
+  app.get('/monitoring/health', (req, res) => res.json({ status: 'monitoring_routes_failed', error: error.message }));
+}
 
 // Health check endpoint (no rate limit)
 app.get('/health', (req, res) => {
