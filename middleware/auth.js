@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 
-module.exports = async (req, res, next) => {
+const authenticate = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -71,4 +71,8 @@ module.exports = async (req, res, next) => {
     console.error('❌ Auth middleware error:', err.message);
     res.status(500).json({ error: 'Internal authentication error' });
   }
-}; 
+};
+
+// Export both named and default for compatibility
+module.exports = authenticate;
+module.exports.authenticate = authenticate; 
