@@ -1504,3 +1504,91 @@ async function handleBookAppointment(params, aiEmployee = 'luna') {
             customerEmail,
             `✨ Appointment Confirmed - ${serviceType}`,
             `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #2563eb;">✨ Your Appointment is Confirmed!</h2>
+              <div style="background: #f3f4f6; padding: 20px; border-radius: 8px;">
+                <p>Hi ${customerName}!</p>
+                <p>Your <strong>${serviceType}</strong> appointment is confirmed for:</p>
+                <p style="font-size: 18px; color: #2563eb;"><strong>${confirmationTime}</strong></p>
+                <p><strong>Confirmation ID:</strong> ${result.data.id}</p>
+              </div>
+              <p style="text-align: center;">
+                <img src="https://luna-visual-server.onrender.com/luna.gif" alt="Luna AI" style="width: 100px; height: 100px;"/>
+              </p>
+              <p style="text-align: center;">
+                <a href="https://luna-visual-server.onrender.com" style="background: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">💫 Meet Luna AI</a>
+              </p>
+              <p style="text-align: center; color: #666;">
+                Need to reschedule? Call us at 702-776-0084
+              </p>
+            </div>
+            `,
+            `Hi ${customerName}!\n\nYour ${serviceType} appointment is confirmed for ${confirmationTime}.\n\nConfirmation: ${result.data.id}\n\nWe'll see you then! ✨\n\nMeet Luna: https://luna-visual-server.onrender.com\nCall: 702-776-0084`
+          );
+        }
+        
+        console.log('📊 Notification Summary:', {
+          smsToRichard: smsSuccess,
+          smsToCustomer: customerPhone ? customerSmsSuccess : 'No phone provided',
+          emailSent: true,
+          timestamp: new Date().toISOString()
+        });
+        
+      } catch (notificationError) {
+        console.error('❌ Notification sending error:', notificationError);
+        // Don't fail the booking if notifications fail
+      }
+      
+      // Generate personality-specific success response
+      const successResponse = responseCoordinator.generateResponse(
+        aiEmployee,
+        'booking_success',
+        {
+          customerName,
+          serviceType: serviceType || 'appointment',
+          confirmationTime,
+          appointmentId: result.data.id
+        }
+      );
+      
+      return {
+        response: successResponse.response,
+        data: {
+          appointmentId: result.data.id,
+          appointmentTime: confirmationTime,
+          customerName,
+          serviceType: serviceType || 'appointment',
+          aiEmployee,
+          confidence: successResponse.confidence
+        }
+      };
+    } else {
+      const errorResponse = responseCoordinator.generateResponse(
+        aiEmployee,
+        'booking_failed',
+        { customerName, serviceType }
+      );
+      return { response: errorResponse.response };
+    }
+  } catch (error) {
+    console.error('Error booking appointment:', error);
+    return {
+      response: "I'm sorry, I couldn't book that appointment. Would you like me to check for other available times?"
+    };
+  }
+}
+
+// Start the server
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, '0.0.0.0', () => {
+  console.log('='.repeat(60));
+  console.log('🚀 TheChattyAI Calendar API - PRODUCTION READY');
+  console.log('='.repeat(60));
+  console.log(`📡 Server running on port ${PORT}`);
+  console.log(`🌐 Health check: http://localhost:${PORT}/healthz`);
+  console.log(`🎙️ Vapi webhook: http://localhost:${PORT}/vapi-webhook`);
+  console.log(`🎙️ Vapi simple: http://localhost:${PORT}/vapi`);
+  console.log('='.repeat(60));
+  console.log('✅ Ready for production traffic!');
+  console.log('='.repeat(60));
+});
