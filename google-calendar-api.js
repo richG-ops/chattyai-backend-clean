@@ -158,6 +158,17 @@ app.get('/healthz', (req, res) => {
   });
 });
 
+// DIAGNOSTIC: Test route next to healthz to isolate routing issue
+app.get('/diagnostic', (req, res) => {
+  res.json({ 
+    message: 'DIAGNOSTIC ROUTE WORKS - POSITION TEST',
+    timestamp: new Date().toISOString(),
+    method: req.method,
+    path: req.path,
+    headers: req.headers
+  });
+});
+
 // Root endpoint for service discovery
 app.get('/', (req, res) => {
   res.status(200).json({
