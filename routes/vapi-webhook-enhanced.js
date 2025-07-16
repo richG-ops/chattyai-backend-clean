@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const { getDb } = require('../db-config');
+const { getCallDataStorage } = require('../lib/call-data-storage');
 
 // Resilient UUID import with fallback (Senior Dev Team Fix)
 let uuidv4;
@@ -473,6 +474,44 @@ async function handleBookAppointment(params, aiEmployee, call) {
     });
     
     console.log(`📅 Booking job queued: ${job.id}`);
+    
+    // ENTERPRISE CALL DATA STORAGE (Dr. Voss Implementation)
+    try {
+      const callStorage = getCallDataStorage();
+      const appointmentDateTime = DateTime.fromISO(`${date}T${time}`, 
+        { zone: 'America/Los_Angeles' }).toJSDate();
+      
+      const storedCallData = await callStorage.storeCallData({
+        business_id: call?.assistantId || process.env.DEFAULT_TENANT_ID,
+        call_id: call?.id,
+        vapi_assistant_id: call?.assistantId,
+        caller_phone: customerPhone,
+        caller_email: customerEmail,
+        customer_name: customerName,
+        appointment_date: appointmentDateTime,
+        appointment_time: time,
+        service_type: serviceType || 'General Appointment',
+        status: 'confirmed',
+        raw_vapi_payload: {
+          functionCall: 'bookAppointment',
+          parameters: params,
+          callMetadata: call,
+          aiEmployee,
+          timestamp: new Date().toISOString()
+        }
+      });
+      
+      console.log(`📊 Call data stored successfully: ${storedCallData.id}`);
+      
+    } catch (storageError) {
+      // Non-blocking: Don't fail booking if storage fails
+      console.error('⚠️ Call data storage failed (non-critical):', storageError.message);
+      if (global.Sentry) {
+        global.Sentry.captureException(storageError, {
+          tags: { component: 'call_data_storage', critical: false }
+        });
+      }
+    }
     
     // Return immediate response to caller
     const appointmentDate = DateTime.fromISO(`${date}T${time}`, 
