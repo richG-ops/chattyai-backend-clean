@@ -8,22 +8,6 @@ const { getDb } = require('./db-config');
 // Add rate limiter import
 const { readLimiter } = require('./middleware/rate-limit');
 const http = require('http');
-const server = http.createServer(app);
-const allowedOrigin = process.env.NODE_ENV === 'production'
-  ? process.env.FRONTEND_URL || 'https://your-vercel-frontend.vercel.app'
-  : '*';
-const io = require('socket.io')(server, {
-  cors: { origin: allowedOrigin, methods: ['GET', 'POST'] }
-});
-
-// Socket.io connection handling
-io.on('connection', (socket) => {
-  console.log('Dashboard client connected');
-  socket.on('join-tenant', (tenantId) => {
-    socket.join(tenantId); // Room per tenant for isolation
-  });
-  socket.on('disconnect', () => console.log('Dashboard disconnected'));
-});
 
 // Environment variable validation (fail fast if missing)
 const requiredEnvVars = [
@@ -47,6 +31,24 @@ if (missingVars.length > 0) {
 
 // Create app instance
 const app = express();
+
+// Create HTTP server and Socket.io after app is created
+const server = http.createServer(app);
+const allowedOrigin = process.env.NODE_ENV === 'production'
+  ? process.env.FRONTEND_URL || 'https://your-vercel-frontend.vercel.app'
+  : '*';
+const io = require('socket.io')(server, {
+  cors: { origin: allowedOrigin, methods: ['GET', 'POST'] }
+});
+
+// Socket.io connection handling
+io.on('connection', (socket) => {
+  console.log('Dashboard client connected');
+  socket.on('join-tenant', (tenantId) => {
+    socket.join(tenantId); // Room per tenant for isolation
+  });
+  socket.on('disconnect', () => console.log('Dashboard disconnected'));
+});
 
 // Initialize Sentry for production monitoring
 if (process.env.SENTRY_DSN) {
