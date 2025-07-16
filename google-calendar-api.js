@@ -5,6 +5,10 @@
 // Load environment variables first
 require('dotenv').config();
 
+// Validate environment at startup (Prof. Hale requirement)
+const { validateEnvironment, getConfigSummary } = require('./lib/env-validation');
+validateEnvironment();
+
 const express = require('express');
 const { google } = require('googleapis');
 const bodyParser = require('body-parser');
@@ -32,8 +36,8 @@ const { twilioLimiter, emailLimiter } = require('./utils/twilio-limiter');
 // Import idempotency middleware
 const idempotencyMiddleware = require('./middleware/idempotency');
 
-// Import enhanced routes
-const vapiWebhookRouter = require('./routes/vapi-webhook-enhanced');
+// Import unified webhook (Prof. Hale architecture)
+const unifiedWebhookRouter = require('./routes/vapi-webhook-unified');
 
 // Load monitoring router with error handling to prevent route registration failure
 let monitoringRouter;
@@ -678,12 +682,12 @@ app.post('/book-appointment', authMiddleware, writeLimiter, validateAppointment,
   }
 });
 
-// Mount enhanced routes with error handling
+// Mount unified webhook (Prof. Hale single endpoint architecture)
 try {
-  app.use('/vapi-webhook', vapiWebhookRouter);  // Fixed: mount at specific path
-  console.log('✅ VAPI webhook routes loaded successfully');
+  app.use('/vapi-webhook', unifiedWebhookRouter);
+  console.log('✅ Unified VAPI webhook routes loaded successfully');
 } catch (error) {
-  console.error('❌ Failed to load VAPI webhook routes:', error.message);
+  console.error('❌ Failed to load unified VAPI webhook routes:', error.message);
 }
 
 try {
@@ -1241,10 +1245,9 @@ function generateCallSummary(transcript, outcome, contactInfo) {
   return `Call completed - ${outcome || 'no outcome recorded'}`;
 }
 
-// Import database connection helper
+// Use unified database connection (Prof. Hale architecture)
 function getDb() {
-  const knex = require('knex')(require('./knexfile').production);
-  return knex;
+  return require('./lib/db');
 }
 
 // Create new client (for onboarding)
@@ -1427,86 +1430,7 @@ function generateSimpleResponse(scenario, params) {
   }
 }
 
-// Vapi.ai webhook endpoint for voice calls with AI Personalities
-app.post('/vapi-webhook', async (req, res) => {
-  try {
-    const { function: functionName, parameters, aiEmployee = 'luna' } = req.body;
-    
-    // ENHANCED LOGGING FOR DEBUGGING
-    console.log('🎯 VAPI WEBHOOK CALLED - DETAILED DEBUG:', {
-      timestamp: new Date().toISOString(),
-      functionName,
-      aiEmployee,
-      parameters: JSON.stringify(parameters, null, 2),
-      headers: {
-        'content-type': req.headers['content-type'],
-        'user-agent': req.headers['user-agent']
-      },
-      fullBody: JSON.stringify(req.body, null, 2)
-    });
-    
-    let result;
-    switch (functionName) {
-      case 'checkAvailability':
-        result = await handleCheckAvailability(parameters, aiEmployee);
-        break;
-        
-      case 'bookAppointment':
-        // LOG CRITICAL PARAMETERS
-        console.log('📱 BOOKING ATTEMPT:', {
-          hasCustomerName: !!parameters.customerName,
-          hasCustomerPhone: !!parameters.customerPhone,
-          hasCustomerEmail: !!parameters.customerEmail,
-          hasDate: !!parameters.date,
-          hasTime: !!parameters.time,
-          actualParams: parameters
-        });
-        result = await handleBookAppointment(parameters, aiEmployee);
-        break;
-        
-      case 'getBusinessHours':
-        result = await handleGetBusinessHours(aiEmployee);
-        break;
-        
-      case 'handleComplaint':
-        result = await handleComplaint(parameters, aiEmployee);
-        break;
-        
-      case 'qualifyLead':
-        result = await handleLeadQualification(parameters, aiEmployee);
-        break;
-        
-      default:
-        // Generate personality-specific response for unknown requests
-        const personalityResponse = responseCoordinator.generateResponse(
-          aiEmployee, 
-          'general_inquiry', 
-          { question: functionName, ...parameters }
-        );
-        result = { response: personalityResponse.response };
-    }
-    
-    console.log('✅ VAPI WEBHOOK RESPONSE:', {
-      timestamp: new Date().toISOString(),
-      functionName,
-      responseLength: JSON.stringify(result).length,
-      hasData: !!result.data
-    });
-    
-    res.json(result);
-  } catch (error) {
-    console.error('❌ Vapi webhook error:', error);
-    
-    // Even errors get personality-specific responses
-    const errorResponse = responseCoordinator.generateResponse(
-      req.body.aiEmployee || 'luna',
-      'technical_difficulty',
-      { error: error.message }
-    );
-    
-    res.json({ response: errorResponse.response });
-  }
-});
+// REMOVED: Duplicate webhook handler - now using unified webhook system
 
 // Test endpoint to verify route registration
 app.get('/test-route', (req, res) => {
@@ -1844,17 +1768,23 @@ async function handleBookAppointment(params, aiEmployee = 'luna') {
   }
 }
 
-// Start the server
+// Start the server with Prof. Hale architecture
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, '0.0.0.0', () => {
+  const config = getConfigSummary();
+  
   console.log('='.repeat(60));
-  console.log('🚀 TheChattyAI Calendar API - PRODUCTION READY');
+  console.log('🚀 TheChattyAI Calendar API - PROF. HALE ARCHITECTURE');
   console.log('='.repeat(60));
   console.log(`📡 Server running on port ${PORT}`);
-  console.log(`🌐 Health check: http://localhost:${PORT}/healthz`);
-  console.log(`🎙️ Vapi webhook: http://localhost:${PORT}/vapi-webhook`);
-  console.log(`🎙️ Vapi simple: http://localhost:${PORT}/vapi`);
+  console.log(`🌐 Environment: ${config.environment}`);
+  console.log(`🎙️ Unified webhook: http://localhost:${PORT}/vapi-webhook`);
+  console.log(`📞 Call data API: http://localhost:${PORT}/api/calls`);
+  console.log(`💾 Database: ${config.database}`);
+  console.log(`📱 SMS enabled: ${config.notifications.sms}`);
+  console.log(`📧 Email enabled: ${config.notifications.email}`);
+  console.log(`🔐 Webhook security: ${config.notifications.webhook}`);
   console.log('='.repeat(60));
-  console.log('✅ Ready for production traffic!');
+  console.log('✅ Ready for enterprise-scale traffic!');
   console.log('='.repeat(60));
 });

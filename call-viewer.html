@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TheChattyAI - Call Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: #f8f9ff;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            color: #64748b;
+            font-size: 0.9rem;
+        }
+        
+        .calls-section {
+            margin-top: 30px;
+        }
+        
+        .calls-section h2 {
+            color: #1e293b;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+        }
+        
+        .call-card {
+            background: #f8f9ff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .call-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+        }
+        
+        .call-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .call-id {
+            font-family: monospace;
+            background: #667eea;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+        }
+        
+        .call-time {
+            color: #64748b;
+            font-size: 0.9rem;
+        }
+        
+        .contact-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .contact-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .contact-label {
+            font-weight: 600;
+            color: #374151;
+            min-width: 80px;
+        }
+        
+        .contact-value {
+            color: #667eea;
+            word-break: break-all;
+        }
+        
+        .call-summary {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            margin-top: 15px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #64748b;
+        }
+        
+        .refresh-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-bottom: 20px;
+            transition: background 0.2s;
+        }
+        
+        .refresh-btn:hover {
+            background: #5a67d8;
+        }
+        
+        .error {
+            background: #fee2e2;
+            color: #dc2626;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #64748b;
+        }
+        
+        .empty-state h3 {
+            margin-bottom: 10px;
+            color: #374151;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📞 TheChattyAI Call Dashboard</h1>
+            <p>Real-time call data and analytics powered by Luna AI</p>
+        </div>
+        
+        <div class="content">
+            <button class="refresh-btn" onclick="loadData()">🔄 Refresh Data</button>
+            
+            <div id="error-container"></div>
+            
+            <!-- Stats Section -->
+            <div class="stats-grid" id="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number" id="total-calls">-</div>
+                    <div class="stat-label">Total Calls</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="bookings">-</div>
+                    <div class="stat-label">Bookings</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="conversion-rate">-</div>
+                    <div class="stat-label">Conversion Rate</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="avg-duration">-</div>
+                    <div class="stat-label">Avg Duration (sec)</div>
+                </div>
+            </div>
+            
+            <!-- Recent Calls Section -->
+            <div class="calls-section">
+                <h2>📋 Recent Calls</h2>
+                <div id="calls-container">
+                    <div class="loading">Loading call data...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://chattyai-backend-clean.onrender.com';
+        
+        async function loadData() {
+            try {
+                document.getElementById('error-container').innerHTML = '';
+                document.getElementById('calls-container').innerHTML = '<div class="loading">Loading call data...</div>';
+                
+                // Load analytics
+                const analyticsResponse = await fetch(`${API_BASE}/api/calls/analytics?period=today`);
+                const analytics = await analyticsResponse.json();
+                
+                if (analytics.success) {
+                    updateStats(analytics.analytics);
+                }
+                
+                // Load recent calls
+                const callsResponse = await fetch(`${API_BASE}/api/calls?limit=10`);
+                const calls = await callsResponse.json();
+                
+                if (calls.success) {
+                    displayCalls(calls.calls);
+                } else {
+                    throw new Error(calls.error || 'Failed to load calls');
+                }
+                
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('error-container').innerHTML = `
+                    <div class="error">
+                        <strong>Error loading data:</strong> ${error.message}
+                        <br><small>Make sure your backend is running and accessible.</small>
+                    </div>
+                `;
+                document.getElementById('calls-container').innerHTML = '<div class="empty-state"><h3>Unable to load calls</h3><p>Check the error above for details.</p></div>';
+            }
+        }
+        
+        function updateStats(analytics) {
+            document.getElementById('total-calls').textContent = analytics.totalCalls || 0;
+            document.getElementById('bookings').textContent = analytics.bookings || 0;
+            document.getElementById('conversion-rate').textContent = (analytics.conversionRate || 0) + '%';
+            document.getElementById('avg-duration').textContent = analytics.avgDuration || 0;
+        }
+        
+        function displayCalls(calls) {
+            const container = document.getElementById('calls-container');
+            
+            if (calls.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <h3>No calls yet!</h3>
+                        <p>Make a test call to your VAPI agent to see data here.</p>
+                        <p><strong>Your VAPI agent is ready to receive calls!</strong></p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = calls.map(call => {
+                const startTime = new Date(call.startedAt).toLocaleString();
+                const duration = call.duration || 0;
+                const outcome = call.outcome || 'completed';
+                
+                return `
+                    <div class="call-card">
+                        <div class="call-header">
+                            <span class="call-id">${call.id}</span>
+                            <span class="call-time">${startTime}</span>
+                        </div>
+                        
+                        <div class="contact-info">
+                            <div class="contact-item">
+                                <span class="contact-label">📞 Phone:</span>
+                                <span class="contact-value">${call.phoneNumber || 'Not provided'}</span>
+                            </div>
+                            <div class="contact-item">
+                                <span class="contact-label">👤 Name:</span>
+                                <span class="contact-value">${call.contactInfo?.customerName || 'Not provided'}</span>
+                            </div>
+                            <div class="contact-item">
+                                <span class="contact-label">📧 Email:</span>
+                                <span class="contact-value">${call.contactInfo?.customerEmail || 'Not provided'}</span>
+                            </div>
+                            <div class="contact-item">
+                                <span class="contact-label">⏱️ Duration:</span>
+                                <span class="contact-value">${duration}s</span>
+                            </div>
+                            <div class="contact-item">
+                                <span class="contact-label">📊 Outcome:</span>
+                                <span class="contact-value">${outcome}</span>
+                            </div>
+                            <div class="contact-item">
+                                <span class="contact-label">🤖 AI:</span>
+                                <span class="contact-value">${call.aiEmployee || 'luna'}</span>
+                            </div>
+                        </div>
+                        
+                        ${call.summary ? `
+                            <div class="call-summary">
+                                <strong>Summary:</strong> ${call.summary}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        // Load data on page load
+        loadData();
+        
+        // Auto-refresh every 30 seconds
+        setInterval(loadData, 30000);
+    </script>
+</body>
+</html> 
