@@ -1,10 +1,31 @@
 // Clean entry point - no side effects during require
 require('dotenv').config();
+
+// CRITICAL ENVIRONMENT VALIDATION (Senior Dev Fix #5)
+const requiredEnvVars = [
+  'DATABASE_URL',
+  'DEFAULT_TENANT_ID', 
+  'VAPI_WEBHOOK_SECRET',
+  'TWILIO_ACCOUNT_SID',
+  'TWILIO_AUTH_TOKEN',
+  'TWILIO_FROM_NUMBER',
+  'SENDGRID_API_KEY'
+];
+
+const missingVars = requiredEnvVars.filter(key => !process.env[key]);
+if (missingVars.length > 0) {
+  console.error('❌ CRITICAL: Missing required environment variables:', missingVars.join(', '));
+  console.error('❌ System cannot start without these variables');
+  process.exit(1);
+}
+
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const Sentry = require('@sentry/node');
-const { getDb } = require('./db-config');
+
+// Use unified database connection (Senior Dev Fix #2)
+const db = require('./db-config');
 // Add rate limiter import
 const { readLimiter } = require('./middleware/rate-limit');
 const http = require('http');
@@ -142,7 +163,7 @@ function generateCallSummary(transcript, outcome, contactInfo) {
   return `Call completed - ${outcome || 'no outcome recorded'}`;
 }
 
-// Get all calls for a client/tenant
+// Get all calls for a client/tenant (Senior Dev Fix #4)
 app.get('/api/calls', readLimiter, async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 20;
@@ -151,55 +172,66 @@ app.get('/api/calls', readLimiter, async (req, res) => {
     
     console.log(`📞 Fetching calls: limit=${limit}, offset=${offset}, tenant=${tenantId}`);
     
-    const db = getDb();
-    
-    // Get calls with extracted contact information
+    // Query unified calls table
     const calls = await db('calls')
       .select([
         'call_id',
         'phone_number',
+        'caller_phone',
+        'caller_email',
         'started_at',
         'ended_at',
         'duration_seconds',
         'outcome',
         'extracted_data',
-        'ai_employee',
-        'recording_url',
-        'cost',
-        'transcript'
+        'transcript',
+        'appointment_date',
+        'status',
+        'created_at'
       ])
       .where('tenant_id', tenantId)
-      .orderBy('started_at', 'desc')
+      .orderBy('created_at', 'desc')
       .limit(limit)
       .offset(offset);
     
-    // Process calls to extract contact info
+    // Process calls for dashboard display
     const processedCalls = calls.map(call => {
-      const extractedData = call.extracted_data || {};
+      let extractedData = {};
+      try {
+        extractedData = typeof call.extracted_data === 'string' 
+          ? JSON.parse(call.extracted_data) 
+          : call.extracted_data || {};
+      } catch (e) {
+        console.warn('Failed to parse extracted_data for call:', call.call_id);
+      }
       
-      // Extract contact information from various sources
-      let contactInfo = {};
+      // Extract contact information
+      let contactInfo = {
+        customerName: null,
+        customerPhone: call.caller_phone || call.phone_number,
+        customerEmail: call.caller_email,
+        serviceType: null
+      };
       
-      // Check bookAppointment function data
+      // Get data from bookAppointment function
       if (extractedData.bookAppointment) {
         contactInfo = {
           customerName: extractedData.bookAppointment.customerName,
-          customerPhone: extractedData.bookAppointment.customerPhone || call.phone_number,
-          customerEmail: extractedData.bookAppointment.customerEmail,
+          customerPhone: extractedData.bookAppointment.customerPhone || call.caller_phone,
+          customerEmail: extractedData.bookAppointment.customerEmail || call.caller_email,
           serviceType: extractedData.bookAppointment.serviceType
         };
       }
       
       return {
         id: call.call_id,
-        phoneNumber: call.phone_number,
+        phoneNumber: call.caller_phone || call.phone_number,
         startedAt: call.started_at,
         endedAt: call.ended_at,
-        duration: call.duration_seconds,
+        duration: call.duration_seconds || 0,
         outcome: call.outcome || 'completed',
-        aiEmployee: call.ai_employee || 'luna',
-        recordingUrl: call.recording_url,
-        cost: call.cost || 0,
+        status: call.status || 'completed',
+        appointmentDate: call.appointment_date,
         hasTranscript: !!call.transcript,
         contactInfo,
         summary: generateCallSummary(call.transcript, call.outcome, contactInfo)
@@ -219,7 +251,7 @@ app.get('/api/calls', readLimiter, async (req, res) => {
   }
 });
 
-// Get specific call details including transcript and Q&A
+// Get specific call details including transcript (Senior Dev Fix #4)
 app.get('/api/calls/:callId', readLimiter, async (req, res) => {
   try {
     const { callId } = req.params;
@@ -227,9 +259,7 @@ app.get('/api/calls/:callId', readLimiter, async (req, res) => {
     
     console.log(`📞 Fetching call details: ${callId}`);
     
-    const db = getDb();
-    
-    // Get call record
+    // Get call record from unified table
     const call = await db('calls')
       .where({ call_id: callId, tenant_id: tenantId })
       .first();
@@ -238,51 +268,47 @@ app.get('/api/calls/:callId', readLimiter, async (req, res) => {
       return res.status(404).json({ error: 'Call not found' });
     }
     
-    // Get Q&A pairs for this call
-    let qaPairs = [];
+    // Process extracted data
+    let extractedData = {};
     try {
-      qaPairs = await db('call_qa_pairs')
-        .where({ call_id: callId })
-        .orderBy('sequence_number', 'asc');
-    } catch (error) {
-      console.log('⚠️ Q&A table not found, skipping:', error.message);
+      extractedData = typeof call.extracted_data === 'string' 
+        ? JSON.parse(call.extracted_data) 
+        : call.extracted_data || {};
+    } catch (e) {
+      console.warn('Failed to parse extracted_data for call:', call.call_id);
     }
     
-    // Process extracted data
-    const extractedData = call.extracted_data || {};
-    let contactInfo = {};
+    let contactInfo = {
+      customerName: null,
+      customerPhone: call.caller_phone || call.phone_number,
+      customerEmail: call.caller_email,
+      serviceType: null,
+      appointmentDate: call.appointment_date,
+      appointmentTime: null
+    };
     
     if (extractedData.bookAppointment) {
       contactInfo = {
         customerName: extractedData.bookAppointment.customerName,
-        customerPhone: extractedData.bookAppointment.customerPhone || call.phone_number,
-        customerEmail: extractedData.bookAppointment.customerEmail,
+        customerPhone: extractedData.bookAppointment.customerPhone || call.caller_phone,
+        customerEmail: extractedData.bookAppointment.customerEmail || call.caller_email,
         serviceType: extractedData.bookAppointment.serviceType,
-        appointmentDate: extractedData.bookAppointment.date,
+        appointmentDate: call.appointment_date,
         appointmentTime: extractedData.bookAppointment.time
       };
     }
     
     const callDetails = {
       id: call.call_id,
-      phoneNumber: call.phone_number,
+      phoneNumber: call.caller_phone || call.phone_number,
       startedAt: call.started_at,
       endedAt: call.ended_at,
-      duration: call.duration_seconds,
+      duration: call.duration_seconds || 0,
       outcome: call.outcome || 'completed',
-      aiEmployee: call.ai_employee || 'luna',
-      recordingUrl: call.recording_url,
-      cost: call.cost || 0,
-      transcript: call.transcript,
-      messages: call.messages || [],
+      status: call.status || 'completed',
+      transcript: call.transcript || '',
+      appointmentDate: call.appointment_date,
       contactInfo,
-      qaPairs: qaPairs.map(qa => ({
-        question: qa.question,
-        answer: qa.answer,
-        intent: qa.intent,
-        sequenceNumber: qa.sequence_number,
-        metadata: qa.metadata ? JSON.parse(qa.metadata) : {}
-      })),
       extractedData,
       summary: generateCallSummary(call.transcript, call.outcome, contactInfo)
     };
@@ -295,13 +321,11 @@ app.get('/api/calls/:callId', readLimiter, async (req, res) => {
   }
 });
 
-// Get call analytics/metrics
+// Get call analytics/metrics (Senior Dev Fix #4)
 app.get('/api/calls/analytics', readLimiter, async (req, res) => {
   try {
     const period = req.query.period || 'today'; // today, week, month
     const tenantId = req.query.tenantId || process.env.DEFAULT_TENANT_ID;
-    
-    const db = getDb();
     
     // Calculate date range
     const now = new Date();
@@ -321,16 +345,15 @@ app.get('/api/calls/analytics', readLimiter, async (req, res) => {
         startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     }
     
-    // Get call metrics
+    // Get call metrics from unified table
     const metrics = await db('calls')
       .where('tenant_id', tenantId)
-      .where('started_at', '>=', startDate)
+      .where('created_at', '>=', startDate)
       .select([
         db.raw('COUNT(*) as total_calls'),
         db.raw('COUNT(CASE WHEN outcome = \'booked\' THEN 1 END) as bookings'),
         db.raw('AVG(duration_seconds) as avg_duration'),
-        db.raw('SUM(cost) as total_cost'),
-        db.raw('COUNT(CASE WHEN extracted_data IS NOT NULL THEN 1 END) as calls_with_data')
+        db.raw('COUNT(CASE WHEN extracted_data IS NOT NULL AND extracted_data != \'{}\'::jsonb THEN 1 END) as calls_with_data')
       ])
       .first();
     
@@ -347,7 +370,6 @@ app.get('/api/calls/analytics', readLimiter, async (req, res) => {
       bookings: parseInt(metrics.bookings) || 0,
       conversionRate,
       avgDuration: Math.round(metrics.avg_duration) || 0,
-      totalCost: parseFloat(metrics.total_cost) || 0,
       callsWithData: parseInt(metrics.calls_with_data) || 0
     };
     
@@ -358,12 +380,11 @@ app.get('/api/calls/analytics', readLimiter, async (req, res) => {
     
     // Return mock data if database fails
     const mockAnalytics = {
-      period,
+      period: req.query.period || 'today',
       totalCalls: 0,
       bookings: 0,
       conversionRate: 0,
       avgDuration: 0,
-      totalCost: 0,
       callsWithData: 0
     };
     
