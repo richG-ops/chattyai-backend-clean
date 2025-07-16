@@ -695,6 +695,14 @@ try {
   app.get('/monitoring/health', (req, res) => res.json({ status: 'monitoring_routes_failed', error: error.message }));
 }
 
+// Mount VAPI simple routes (CRITICAL FIX)
+try {
+  app.use('/vapi', require('./routes/vapi-simple'));
+  console.log('✅ VAPI simple routes loaded successfully');
+} catch (error) {
+  console.error('❌ Failed to load VAPI simple routes:', error.message);
+}
+
 // Health check endpoint (no rate limit)
 app.get('/health', (req, res) => {
   res.json({ 
