@@ -1,0 +1,23 @@
+# RENDER ENVIRONMENT VARIABLES
+# Add these at: https://dashboard.render.com/web/srv-cttir4l6l47c73c4ot30/env
+
+# Twilio (for SMS) - Get from https://console.twilio.com
+TWILIO_ACCOUNT_SID=AC...your_account_sid
+TWILIO_AUTH_TOKEN=...your_auth_token
+TWILIO_FROM_NUMBER=+17027760084  # Or your Twilio number
+
+# SendGrid (for Email) - Get from https://app.sendgrid.com
+SENDGRID_API_KEY=SG...your_api_key
+SENDGRID_FROM_EMAIL=noreply@thechattyai.com
+
+# Owner Notifications
+OWNER_PHONE=+17027760084
+OWNER_EMAIL=richard.gallagherxyz@gmail.com
+
+# Optional but recommended
+DASHBOARD_URL=https://thechattyai-frontend.vercel.app
+CRITICAL_ALERTS_ENABLED=true
+
+# These should already be set:
+# DATABASE_URL (from Render PostgreSQL)
+# VAPI_WEBHOOK_SECRET (if using webhook verification) 
