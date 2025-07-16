@@ -1,6 +1,38 @@
 const express = require('express');
 const router = express.Router();
 
+// Add Twilio for SMS functionality
+const twilio = require('twilio');
+const twilioClient = twilio(
+  process.env.TWILIO_ACCOUNT_SID || 'YOUR_TWILIO_ACCOUNT_SID',
+  process.env.TWILIO_AUTH_TOKEN || 'YOUR_TWILIO_AUTH_TOKEN'
+);
+const TWILIO_FROM_NUMBER = process.env.TWILIO_FROM_NUMBER || '+1XXXXXXXXXX';
+
+// Send SMS function
+async function sendSMS(to, message) {
+  try {
+    if (!process.env.TWILIO_ACCOUNT_SID || process.env.TWILIO_ACCOUNT_SID === 'YOUR_TWILIO_ACCOUNT_SID') {
+      console.log('📱 SMS SIMULATION (Twilio not configured):');
+      console.log(`TO: ${to}`);
+      console.log(`MESSAGE: ${message}`);
+      console.log('---');
+      return { success: true, simulated: true };
+    }
+    
+    const result = await twilioClient.messages.create({
+      body: message,
+      from: TWILIO_FROM_NUMBER,
+      to: to
+    });
+    console.log('✅ SMS sent:', result.sid);
+    return { success: true, messageId: result.sid };
+  } catch (error) {
+    console.error('❌ SMS error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 // Simple VAPI endpoint for voice AI integration
 // No authentication required for basic functionality
 router.post('/', async (req, res) => {
@@ -57,6 +89,44 @@ router.post('/', async (req, res) => {
         
         // TODO: Trigger SMS/Email notifications here
         break;
+
+      case 'sendSMS':
+        const { phoneNumber, message } = parameters || {};
+        
+        // Validate required parameters
+        if (!phoneNumber || !message) {
+          response = {
+            response: "I need both a phone number and message to send an SMS. Please provide both.",
+            success: false,
+            error: "Missing required parameters"
+          };
+          break;
+        }
+        
+        // Log SMS attempt
+        console.log('📱 Sending SMS:', {
+          phoneNumber,
+          message: message.substring(0, 50) + (message.length > 50 ? '...' : '')
+        });
+        
+        // Send the SMS
+        const smsResult = await sendSMS(phoneNumber, message);
+        
+        if (smsResult.success) {
+          response = {
+            response: `SMS sent successfully to ${phoneNumber}! ${smsResult.simulated ? '(This was a simulation since Twilio is not configured)' : ''}`,
+            success: true,
+            messageId: smsResult.messageId,
+            simulated: smsResult.simulated || false
+          };
+        } else {
+          response = {
+            response: `I'm sorry, I couldn't send the SMS to ${phoneNumber}. ${smsResult.error || 'Please check the phone number and try again.'}`,
+            success: false,
+            error: smsResult.error
+          };
+        }
+        break;
         
       case 'getBusinessHours':
         response = {
@@ -75,8 +145,8 @@ router.post('/', async (req, res) => {
         
       default:
         response = {
-          response: "Hello! I'm your AI assistant. I can help you check availability, book appointments, or answer questions about our business hours. What would you like to do?",
-          capabilities: ['checkAvailability', 'bookAppointment', 'getBusinessHours']
+          response: "Hello! I'm your AI assistant. I can help you check availability, book appointments, send SMS messages, or answer questions about our business hours. What would you like to do?",
+          capabilities: ['checkAvailability', 'bookAppointment', 'sendSMS', 'getBusinessHours']
         };
     }
     
