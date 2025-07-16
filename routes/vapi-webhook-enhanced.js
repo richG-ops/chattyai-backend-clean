@@ -406,10 +406,160 @@ async function handleEndOfCall(call, transcript, tenantId, db) {
     }
     
     console.log(`📞 Call ${call.id} ended. Duration: ${duration}s`);
+    
+    // 🆕 GENERAL CALL NOTIFICATIONS - Send SMS/Email for ALL calls with contact info
+    await sendGeneralCallNotifications(call, transcript, qaPairs, tenantId);
+    
   } catch (error) {
     console.error('Failed to handle call end:', error);
     throw error;
   }
+}
+
+// 🆕 NEW FUNCTION: Send SMS and email for all calls with contact information
+async function sendGeneralCallNotifications(call, transcript, qaPairs, tenantId) {
+  try {
+    // Extract contact information from Q&A pairs
+    const contactInfo = extractContactFromQA(qaPairs);
+    
+    // Only send notifications if we have contact information
+    if (!contactInfo.name && !contactInfo.phone && !contactInfo.email) {
+      console.log(`📞 Call ${call.id}: No contact info collected, skipping general notifications`);
+      return;
+    }
+    
+    console.log(`📞 Call ${call.id}: Contact info collected, sending notifications:`, contactInfo);
+    
+    // Get business owner contact info
+    const ownerPhone = process.env.OWNER_PHONE || '7027760084';
+    const ownerEmail = process.env.OWNER_EMAIL || 'richard.gallagherxyz@gmail.com';
+    
+    // 1. SMS to business owner
+    if (ownerPhone) {
+      await addNotificationJob('sms', {
+        to: ownerPhone,
+        template: 'new_call_alert',
+        data: {
+          callId: call.id,
+          callerPhone: call.phoneNumber,
+          callerName: contactInfo.name || 'Unknown',
+          callerEmail: contactInfo.email || 'Not provided',
+          duration: Math.round((new Date(call.endedAt) - new Date(call.startedAt)) / 1000),
+          callSummary: generateCallSummary(transcript, qaPairs),
+          timestamp: new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })
+        }
+      }, { priority: PRIORITIES.NORMAL });
+    }
+    
+    // 2. Email to business owner
+    if (ownerEmail) {
+      await addNotificationJob('email', {
+        to: ownerEmail,
+        template: 'new_call_report',
+        data: {
+          callId: call.id,
+          callerPhone: call.phoneNumber,
+          callerName: contactInfo.name || 'Unknown',
+          callerEmail: contactInfo.email || 'Not provided',
+          duration: Math.round((new Date(call.endedAt) - new Date(call.startedAt)) / 1000),
+          transcript: transcript?.text || 'No transcript available',
+          qaPairs: qaPairs.slice(0, 10), // First 10 Q&A pairs for summary
+          timestamp: new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }),
+          recordingUrl: call.recordingUrl
+        }
+      }, { priority: PRIORITIES.NORMAL });
+    }
+    
+    // 3. SMS to caller (if phone provided)
+    if (contactInfo.phone) {
+      await addNotificationJob('sms', {
+        to: contactInfo.phone,
+        template: 'call_followup',
+        data: {
+          callerName: contactInfo.name || 'there',
+          businessName: process.env.BUSINESS_NAME || 'our business',
+          ownerPhone: ownerPhone,
+          timestamp: new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })
+        }
+      }, { priority: PRIORITIES.NORMAL });
+    }
+    
+    // 4. Email to caller (if email provided)
+    if (contactInfo.email) {
+      await addNotificationJob('email', {
+        to: contactInfo.email,
+        template: 'call_followup',
+        data: {
+          callerName: contactInfo.name || 'there',
+          businessName: process.env.BUSINESS_NAME || 'our business',
+          ownerPhone: ownerPhone,
+          ownerEmail: ownerEmail,
+          timestamp: new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })
+        }
+      }, { priority: PRIORITIES.NORMAL });
+    }
+    
+    console.log(`✅ General call notifications queued for call ${call.id}`);
+    
+  } catch (error) {
+    console.error('❌ Failed to send general call notifications:', error);
+    // Don't throw - this is non-critical
+  }
+}
+
+// Helper: Extract contact information from Q&A pairs
+function extractContactFromQA(qaPairs) {
+  const contact = {};
+  
+  if (!qaPairs || !Array.isArray(qaPairs)) return contact;
+  
+  for (const qa of qaPairs) {
+    try {
+      const metadata = JSON.parse(qa.metadata || '{}');
+      
+      // Extract name, phone, email from metadata
+      if (metadata.name && !contact.name) contact.name = metadata.name;
+      if (metadata.phone && !contact.phone) contact.phone = metadata.phone;
+      if (metadata.email && !contact.email) contact.email = metadata.email;
+      
+      // Also check if the intent is contact_info and extract from answer
+      if (qa.intent === 'contact_info') {
+        const answer = qa.answer || '';
+        
+        // Extract phone from answer
+        const phoneMatch = answer.match(/\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/);
+        if (phoneMatch && !contact.phone) contact.phone = phoneMatch[0];
+        
+        // Extract email from answer
+        const emailMatch = answer.match(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/);
+        if (emailMatch && !contact.email) contact.email = emailMatch[0];
+        
+        // Extract name if question was about name
+        if (qa.question.toLowerCase().includes('name') && !contact.name) {
+          contact.name = answer.trim();
+        }
+      }
+    } catch (error) {
+      console.error('Error parsing Q&A metadata:', error);
+    }
+  }
+  
+  return contact;
+}
+
+// Helper: Generate call summary for notifications
+function generateCallSummary(transcript, qaPairs) {
+  if (!qaPairs || qaPairs.length === 0) {
+    return transcript?.text ? transcript.text.substring(0, 200) + '...' : 'No summary available';
+  }
+  
+  // Create summary from key Q&A pairs
+  const keyTopics = qaPairs.slice(0, 3).map(qa => {
+    const intent = qa.intent.replace('_', ' ');
+    return `${intent}: ${qa.answer.substring(0, 50)}...`;
+  });
+  
+  return keyTopics.join(' | ');
 }
 
 // Determine call outcome from transcript
