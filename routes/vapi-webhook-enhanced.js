@@ -2,7 +2,18 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const { getDb } = require('../db-config');
-const { v4: uuidv4 } = require('uuid');
+
+// Resilient UUID import with fallback (Senior Dev Team Fix)
+let uuidv4;
+try {
+  const uuid = require('uuid');
+  uuidv4 = uuid.v4;
+  console.log('✅ VAPI Webhook: UUID v4 loaded successfully');
+} catch (e) {
+  console.error('❌ VAPI Webhook: UUID load error:', e.message);
+  console.log('🔄 VAPI Webhook: Using crypto.randomUUID fallback');
+  uuidv4 = () => require('crypto').randomUUID();  // Node builtin fallback
+}
 const { DateTime } = require('luxon');
 const { addBookingJob, addAnalyticsJob, addNotificationJob, PRIORITIES } = require('../lib/job-queue');
 
@@ -48,7 +59,7 @@ const validateWebhookSignature = (req, res, next) => {
 const idempotencyMiddleware = async (req, res, next) => {
   const requestId = req.headers['x-vapi-request-id'] || 
                    req.headers['x-request-id'] || 
-                   crypto.randomUUID();
+                   uuidv4();
   
   req.requestId = requestId;
   const db = req.db || getDb();
