@@ -248,89 +248,64 @@ app.post('/vapi', vapiWebhookUltimate); // Legacy support
 app.post('/api/v1/webhook', vapiWebhookUltimate); // New standard
 
 // Dashboard API endpoints
+// Add route for /api/calls with pagination
 app.get('/api/calls', authenticateJWT, async (req, res) => {
   try {
-    const { page = 1, limit = 50, startDate, endDate } = req.query;
+    const { page = 1, limit = 50 } = req.query;
     const offset = (page - 1) * limit;
+    const cacheKey = `calls:${req.tenantId}:${page}:${limit}`;
 
-    let query = db('calls')
-      .where('tenant_id', req.tenantId)
-      .orderBy('created_at', 'desc')
-      .limit(limit)
-      .offset(offset);
-
-    if (startDate) {
-      query = query.where('created_at', '>=', startDate);
-    }
-    if (endDate) {
-      query = query.where('created_at', '<=', endDate);
-    }
-
-    const calls = await query;
-    const total = await db('calls')
-      .where('tenant_id', req.tenantId)
-      .count('* as count')
-      .first();
-
-    res.json({
-      calls,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total: parseInt(total.count),
-        pages: Math.ceil(total.count / limit)
+    // Check cache first
+    if (redis) {
+      const cached = await redis.get(cacheKey);
+      if (cached) {
+        return res.json(JSON.parse(cached));
       }
-    });
+    }
+
+    const calls = await db.query(
+      'SELECT * FROM calls WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
+      [req.tenantId, limit, offset]
+    );
+
+    // Cache the result for 5 minutes
+    if (redis) {
+      await redis.setex(cacheKey, 300, JSON.stringify(calls.rows));
+    }
+
+    res.json(calls.rows);
   } catch (err) {
-    console.error('Get calls error:', err);
+    console.error('Error fetching calls:', err);
     res.status(500).json({ error: 'Failed to fetch calls' });
   }
 });
 
-// Analytics endpoint
+// Add route for /api/analytics
 app.get('/api/analytics', authenticateJWT, async (req, res) => {
   try {
-    const { period = '7d' } = req.query;
-    const startDate = DateTime.now().minus({ days: parseInt(period) }).toSQL();
+    const cacheKey = `analytics:${req.tenantId}`;
 
-    // Get metrics
-    const metrics = await db('calls')
-      .where('tenant_id', req.tenantId)
-      .where('created_at', '>=', startDate)
-      .select(
-        db.raw('COUNT(*) as total_calls'),
-        db.raw('COUNT(CASE WHEN booking_status = \'confirmed\' THEN 1 END) as bookings'),
-        db.raw('AVG(call_duration) as avg_duration'),
-        db.raw('COUNT(DISTINCT customer_phone) as unique_customers')
-      )
-      .first();
+    // Check cache first
+    if (redis) {
+      const cached = await redis.get(cacheKey);
+      if (cached) {
+        return res.json(JSON.parse(cached));
+      }
+    }
 
-    // Get daily breakdown
-    const daily = await db('calls')
-      .where('tenant_id', req.tenantId)
-      .where('created_at', '>=', startDate)
-      .select(
-        db.raw('DATE(created_at) as date'),
-        db.raw('COUNT(*) as calls'),
-        db.raw('COUNT(CASE WHEN booking_status = \'confirmed\' THEN 1 END) as bookings')
-      )
-      .groupBy(db.raw('DATE(created_at)'))
-      .orderBy('date', 'asc');
+    const analytics = await db.query(
+      'SELECT COUNT(*) as total_calls, COUNT(DISTINCT customer_phone) as unique_customers FROM calls WHERE tenant_id = $1',
+      [req.tenantId]
+    );
 
-    res.json({
-      period,
-      metrics: {
-        totalCalls: parseInt(metrics.total_calls),
-        totalBookings: parseInt(metrics.bookings),
-        conversionRate: metrics.total_calls > 0 ? 
-          (metrics.bookings / metrics.total_calls * 100).toFixed(1) : 0,
-        avgCallDuration: Math.round(metrics.avg_duration || 0),
-        uniqueCustomers: parseInt(metrics.unique_customers)
-      },
-      daily
-    });
+    // Cache the result for 5 minutes
+    if (redis) {
+      await redis.setex(cacheKey, 300, JSON.stringify(analytics.rows[0]));
+    }
+
+    res.json(analytics.rows[0]);
   } catch (err) {
-    console.error('Analytics error:', err);
+    console.error('Error fetching analytics:', err);
     res.status(500).json({ error: 'Failed to fetch analytics' });
   }
 });

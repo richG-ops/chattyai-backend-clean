@@ -302,3 +302,32 @@ DASHBOARD_URL=https://your-deployed-url.vercel.app
 ```
 
 This way, all email notifications will include a link to your live dashboard! 🎉 
+
+---
+
+### **Option 1: Add README via GitHub Web UI (Easiest)**
+
+1. Go to your repo: [https://github.com/richG-ops/chattyai-backend](https://github.com/richG-ops/chattyai-backend)
+2. If it says “Quick setup — if you’ve done this kind of thing before,” look for the “Add a README file” button and click it.
+3. If you don’t see that, click the **Add file** button (top right) → **Create new file**.
+4. Name the file exactly: `README.md`
+5. Add any content (even just `# ChattyAI Backend`)
+6. Scroll down and click **Commit new file**.
+
+---
+
+### **Option 2: Add README from Your Local Machine**
+
+If you prefer the command line:
+```sh
+echo "# ChattyAI Backend" > README.md
+git add README.md
+git commit -m "Add README"
+git push unified main
+```
+
+---
+
+**Once you’ve added the README and committed it, you’ll be able to push your full codebase to the repo!**
+
+Let me know when you’ve done this or if you need step-by-step screenshots. 

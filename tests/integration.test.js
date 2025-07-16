@@ -19,7 +19,7 @@ function generateTestToken(tenantId = TEST_TENANT_ID) {
 describe('TheChattyAI Elite Backend Integration Tests', () => {
   let server;
   let testToken;
-
+  
   before(async () => {
     // Set test environment variables
     process.env.JWT_SECRET = TEST_JWT_SECRET;
@@ -31,7 +31,7 @@ describe('TheChattyAI Elite Backend Integration Tests', () => {
     // Start server
     server = app.listen(0); // Random port
   });
-
+  
   after(async () => {
     if (server) {
       await new Promise(resolve => server.close(resolve));
@@ -53,7 +53,7 @@ describe('TheChattyAI Elite Backend Integration Tests', () => {
       const res = await request(app)
         .get('/healthz')
         .expect(200);
-
+      
       expect(res.body).to.have.property('server', 'healthy');
       expect(res.body).to.have.property('database');
       expect(res.body).to.have.property('redis');
@@ -87,7 +87,7 @@ describe('TheChattyAI Elite Backend Integration Tests', () => {
         .get('/get-availability')
         .set('Authorization', `Bearer ${testToken}`)
         .expect(200);
-
+      
       expect(res.body).to.be.an('object');
     });
   });
@@ -103,8 +103,8 @@ describe('TheChattyAI Elite Backend Integration Tests', () => {
             endDate: '2025-01-21',
             duration: 30
           })
-          .expect(200);
-
+        .expect(200);
+      
         expect(res.body).to.be.an('object');
         // Expect slots array or error (depending on Google Calendar setup)
       });
@@ -133,8 +133,8 @@ describe('TheChattyAI Elite Backend Integration Tests', () => {
           customerPhone: '+1234567890',
           service: 'Hair Cut'
         };
-
-        const res = await request(app)
+      
+      const res = await request(app)
           .post('/book-appointment')
           .set('Authorization', `Bearer ${testToken}`)
           .send(bookingData)
@@ -173,7 +173,7 @@ describe('TheChattyAI Elite Backend Integration Tests', () => {
         .post('/webhook')
         .send(webhookData)
         .expect(200);
-
+      
       expect(res.body).to.be.an('object');
     });
 
@@ -191,7 +191,7 @@ describe('TheChattyAI Elite Backend Integration Tests', () => {
         .post('/api/v1/webhook')
         .send(webhookData)
         .expect(200);
-
+      
       expect(res.body).to.be.an('object');
     });
   });
@@ -228,7 +228,7 @@ describe('TheChattyAI Elite Backend Integration Tests', () => {
         expect(res.body.calls).to.be.an('array');
       });
     });
-
+    
     describe('GET /api/analytics', () => {
       it('should return analytics for default period', async () => {
         const res = await request(app)
@@ -243,12 +243,12 @@ describe('TheChattyAI Elite Backend Integration Tests', () => {
       });
 
       it('should support custom time periods', async () => {
-        const res = await request(app)
+      const res = await request(app)
           .get('/api/analytics')
           .set('Authorization', `Bearer ${testToken}`)
           .query({ period: '30d' })
-          .expect(200);
-
+        .expect(200);
+      
         expect(res.body).to.have.property('period', '30d');
       });
     });
@@ -285,11 +285,11 @@ describe('TheChattyAI Elite Backend Integration Tests', () => {
         .set('Authorization', `Bearer ${testToken}`)
         .send(zapierData)
         .expect(200);
-
+      
       expect(res.body).to.have.property('success', true);
       expect(res.body).to.have.property('processed', 'new_booking');
     });
-
+    
     it('should handle unknown Zapier triggers gracefully', async () => {
       const res = await request(app)
         .post('/zapier-webhook')
@@ -299,11 +299,11 @@ describe('TheChattyAI Elite Backend Integration Tests', () => {
           data: {}
         })
         .expect(200);
-
+      
       expect(res.body).to.have.property('success', true);
     });
-  });
-
+    });
+    
   describe('Error Handling', () => {
     it('should return 404 for unknown endpoints', async () => {
       const res = await request(app)
@@ -320,7 +320,7 @@ describe('TheChattyAI Elite Backend Integration Tests', () => {
         .set('Content-Type', 'application/json')
         .send('{ invalid json')
         .expect(400);
-
+      
       expect(res.body).to.have.property('error');
     });
   });
@@ -337,7 +337,7 @@ describe('TheChattyAI Elite Backend Integration Tests', () => {
             .expect(200)
         );
       }
-
+      
       const results = await Promise.all(promises);
       expect(results).to.have.length(10);
       results.forEach(res => {
