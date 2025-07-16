@@ -989,6 +989,264 @@ app.get('/api/clients/:id/bookings', authMiddleware, readLimiter, async (req, re
   }
 });
 
+// 📞 NEW CALL DATA API ENDPOINTS FOR DASHBOARD
+// ==============================================
+
+// Get all calls for a client/tenant
+app.get('/api/calls', readLimiter, async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = parseInt(req.query.offset) || 0;
+    const tenantId = req.query.tenantId || process.env.DEFAULT_TENANT_ID;
+    
+    console.log(`📞 Fetching calls: limit=${limit}, offset=${offset}, tenant=${tenantId}`);
+    
+    const db = getDb();
+    
+    // Get calls with extracted contact information
+    const calls = await db('calls')
+      .select([
+        'call_id',
+        'phone_number',
+        'started_at',
+        'ended_at',
+        'duration_seconds',
+        'outcome',
+        'extracted_data',
+        'ai_employee',
+        'recording_url',
+        'cost',
+        'transcript'
+      ])
+      .where('tenant_id', tenantId)
+      .orderBy('started_at', 'desc')
+      .limit(limit)
+      .offset(offset);
+    
+    // Process calls to extract contact info
+    const processedCalls = calls.map(call => {
+      const extractedData = call.extracted_data || {};
+      
+      // Extract contact information from various sources
+      let contactInfo = {};
+      
+      // Check bookAppointment function data
+      if (extractedData.bookAppointment) {
+        contactInfo = {
+          customerName: extractedData.bookAppointment.customerName,
+          customerPhone: extractedData.bookAppointment.customerPhone || call.phone_number,
+          customerEmail: extractedData.bookAppointment.customerEmail,
+          serviceType: extractedData.bookAppointment.serviceType
+        };
+      }
+      
+      return {
+        id: call.call_id,
+        phoneNumber: call.phone_number,
+        startedAt: call.started_at,
+        endedAt: call.ended_at,
+        duration: call.duration_seconds,
+        outcome: call.outcome || 'completed',
+        aiEmployee: call.ai_employee || 'luna',
+        recordingUrl: call.recording_url,
+        cost: call.cost || 0,
+        hasTranscript: !!call.transcript,
+        contactInfo,
+        summary: generateCallSummary(call.transcript, call.outcome, contactInfo)
+      };
+    });
+    
+    res.json({ 
+      success: true, 
+      calls: processedCalls,
+      total: processedCalls.length,
+      hasMore: calls.length === limit
+    });
+    
+  } catch (error) {
+    console.error('❌ Error fetching calls:', error);
+    res.status(500).json({ error: 'Failed to fetch calls', details: error.message });
+  }
+});
+
+// Get specific call details including transcript and Q&A
+app.get('/api/calls/:callId', readLimiter, async (req, res) => {
+  try {
+    const { callId } = req.params;
+    const tenantId = req.query.tenantId || process.env.DEFAULT_TENANT_ID;
+    
+    console.log(`📞 Fetching call details: ${callId}`);
+    
+    const db = getDb();
+    
+    // Get call record
+    const call = await db('calls')
+      .where({ call_id: callId, tenant_id: tenantId })
+      .first();
+    
+    if (!call) {
+      return res.status(404).json({ error: 'Call not found' });
+    }
+    
+    // Get Q&A pairs for this call
+    const qaPairs = await db('call_qa_pairs')
+      .where({ call_id: callId })
+      .orderBy('sequence_number', 'asc');
+    
+    // Process extracted data
+    const extractedData = call.extracted_data || {};
+    let contactInfo = {};
+    
+    if (extractedData.bookAppointment) {
+      contactInfo = {
+        customerName: extractedData.bookAppointment.customerName,
+        customerPhone: extractedData.bookAppointment.customerPhone || call.phone_number,
+        customerEmail: extractedData.bookAppointment.customerEmail,
+        serviceType: extractedData.bookAppointment.serviceType,
+        appointmentDate: extractedData.bookAppointment.date,
+        appointmentTime: extractedData.bookAppointment.time
+      };
+    }
+    
+    const callDetails = {
+      id: call.call_id,
+      phoneNumber: call.phone_number,
+      startedAt: call.started_at,
+      endedAt: call.ended_at,
+      duration: call.duration_seconds,
+      outcome: call.outcome || 'completed',
+      aiEmployee: call.ai_employee || 'luna',
+      recordingUrl: call.recording_url,
+      cost: call.cost || 0,
+      transcript: call.transcript,
+      messages: call.messages || [],
+      contactInfo,
+      qaPairs: qaPairs.map(qa => ({
+        question: qa.question,
+        answer: qa.answer,
+        intent: qa.intent,
+        sequenceNumber: qa.sequence_number,
+        metadata: qa.metadata ? JSON.parse(qa.metadata) : {}
+      })),
+      extractedData,
+      summary: generateCallSummary(call.transcript, call.outcome, contactInfo)
+    };
+    
+    res.json({ success: true, call: callDetails });
+    
+  } catch (error) {
+    console.error('❌ Error fetching call details:', error);
+    res.status(500).json({ error: 'Failed to fetch call details', details: error.message });
+  }
+});
+
+// Get call analytics/metrics
+app.get('/api/calls/analytics', readLimiter, async (req, res) => {
+  try {
+    const period = req.query.period || 'today'; // today, week, month
+    const tenantId = req.query.tenantId || process.env.DEFAULT_TENANT_ID;
+    
+    const db = getDb();
+    
+    // Calculate date range
+    const now = new Date();
+    let startDate;
+    
+    switch (period) {
+      case 'today':
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        break;
+      case 'week':
+        startDate = new Date(now - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case 'month':
+        startDate = new Date(now - 30 * 24 * 60 * 60 * 1000);
+        break;
+      default:
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    }
+    
+    // Get call metrics
+    const metrics = await db('calls')
+      .where('tenant_id', tenantId)
+      .where('started_at', '>=', startDate)
+      .select([
+        db.raw('COUNT(*) as total_calls'),
+        db.raw('COUNT(CASE WHEN outcome = \'booked\' THEN 1 END) as bookings'),
+        db.raw('AVG(duration_seconds) as avg_duration'),
+        db.raw('SUM(cost) as total_cost'),
+        db.raw('COUNT(CASE WHEN extracted_data IS NOT NULL THEN 1 END) as calls_with_data')
+      ])
+      .first();
+    
+    // Calculate conversion rate
+    const conversionRate = metrics.total_calls > 0 
+      ? Math.round((metrics.bookings / metrics.total_calls) * 100)
+      : 0;
+    
+    const analytics = {
+      period,
+      startDate: startDate.toISOString(),
+      endDate: now.toISOString(),
+      totalCalls: parseInt(metrics.total_calls) || 0,
+      bookings: parseInt(metrics.bookings) || 0,
+      conversionRate,
+      avgDuration: Math.round(metrics.avg_duration) || 0,
+      totalCost: parseFloat(metrics.total_cost) || 0,
+      callsWithData: parseInt(metrics.calls_with_data) || 0
+    };
+    
+    res.json({ success: true, analytics });
+    
+  } catch (error) {
+    console.error('❌ Error fetching call analytics:', error);
+    
+    // Return mock data if database fails
+    const mockAnalytics = {
+      period,
+      totalCalls: 0,
+      bookings: 0,
+      conversionRate: 0,
+      avgDuration: 0,
+      totalCost: 0,
+      callsWithData: 0
+    };
+    
+    res.json({ success: true, analytics: mockAnalytics });
+  }
+});
+
+// Helper function for call summaries
+function generateCallSummary(transcript, outcome, contactInfo) {
+  if (contactInfo && contactInfo.customerName) {
+    const name = contactInfo.customerName;
+    const service = contactInfo.serviceType || 'service';
+    
+    switch (outcome) {
+      case 'booked':
+        return `${name} booked ${service}`;
+      case 'complaint':
+        return `${name} called with complaint`;
+      case 'info_provided':
+        return `${name} requested information`;
+      default:
+        return `Call with ${name}`;
+    }
+  }
+  
+  if (transcript && transcript.length > 100) {
+    return transcript.substring(0, 100) + '...';
+  }
+  
+  return `Call completed - ${outcome || 'no outcome recorded'}`;
+}
+
+// Import database connection helper
+function getDb() {
+  const knex = require('knex')(require('./knexfile').production);
+  return knex;
+}
+
 // Create new client (for onboarding)
 app.post('/api/clients', readLimiter, async (req, res) => {
   try {
