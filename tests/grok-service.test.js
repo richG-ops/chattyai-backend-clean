@@ -1,5 +1,5 @@
-import grokService from '../lib/grok-service';
-import axios from 'axios';
+const grokService = require('../lib/grok-service');
+const axios = require('axios');
 
 jest.mock('axios');
 

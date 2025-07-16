@@ -1,5 +1,5 @@
-import NotificationService from '../lib/notification-service';
-import promiseRetry from 'promise-retry';
+const NotificationService = require('../lib/notification-service');
+const promiseRetry = require('promise-retry');
 
 jest.mock('twilio', () => () => ({
   messages: {

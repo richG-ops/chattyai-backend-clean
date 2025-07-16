@@ -1,5 +1,5 @@
-import hubspotService from '../lib/hubspot-service';
-import axios from 'axios';
+const hubspotService = require('../lib/hubspot-service');
+const axios = require('axios');
 
 jest.mock('axios');
 
