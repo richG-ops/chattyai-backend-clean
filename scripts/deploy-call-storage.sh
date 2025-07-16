@@ -249,3 +249,56 @@ else
 fi
 
 echo -e "${BLUE}============================================================================${NC}" 
+
+## 📊 **Dashboard URL Summary**
+
+Currently, your dashboard **is NOT deployed yet**. You have 3 options:
+
+### **1. Deploy to Vercel (Recommended - Free)**
+```powershell
+.\deploy-dashboard.ps1
+```
+After deployment, your dashboard URL will be:
+- `https://thechattyai-frontend.vercel.app` (or similar)
+- You can add a custom domain like `dashboard.thechattyai.com`
+
+### **2. Run Locally (For Testing)**
+```powershell
+.\run-dashboard-local.ps1
+```
+Dashboard URL: `http://localhost:3000`
+
+### **3. Current Backend API URLs (Already Live)**
+Your backend APIs are already deployed and accessible at:
+- **Call History**: `https://chattyai-backend-clean.onrender.com/api/calls`
+- **Analytics**: `https://chattyai-backend-clean.onrender.com/api/analytics`
+- **Real-time Data**: `https://chattyai-backend-clean.onrender.com/api/dashboard/realtime`
+
+## 🎯 **What the Dashboard Shows**
+
+Once deployed, your dashboard will display:
+- 📞 **Live Call History** - All voice calls with details
+- 📊 **Analytics** - Conversion rates, call volumes, trends
+- 🎯 **Recent Bookings** - Customer details and appointments
+- 📈 **Performance Metrics** - Response times, success rates
+- 🤖 **AI Assistant Status** - Luna's activity monitoring
+
+## 🚀 **Quick Deploy to Get Your Dashboard URL**
+
+Run this right now to get your dashboard live:
+```powershell
+.\deploy-dashboard.ps1
+```
+
+The deployment will:
+1. Install Vercel CLI (if needed)
+2. Build your Next.js dashboard
+3. Deploy to Vercel's free tier
+4. Give you a live URL (e.g., `https://your-project.vercel.app`)
+
+After deployment, update your backend environment variable:
+```
+DASHBOARD_URL=https://your-deployed-url.vercel.app
+```
+
+This way, all email notifications will include a link to your live dashboard! 🎉 
