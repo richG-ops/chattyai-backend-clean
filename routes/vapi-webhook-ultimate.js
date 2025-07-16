@@ -564,6 +564,17 @@ async function processCallEnd(body, tenantId) {
   const bookingInfo = extractBookingInfo(body);
   const outcome = determineOutcome(body);
 
+  // Sentiment analysis (async, non-blocking fallback)
+  let sentiment = 'unknown';
+  try {
+    const grokService = require('../lib/grok-service');
+    if (body.transcript) {
+      sentiment = await grokService.analyzeSentiment(body.transcript);
+    }
+  } catch (sentErr) {
+    console.error('Sentiment analysis failed:', sentErr.message);
+  }
+
   // Store call data
   const callData = {
     call_id: callId,
@@ -575,6 +586,7 @@ async function processCallEnd(body, tenantId) {
     outcome,
     extracted_data: JSON.stringify(body.extracted_data || {}),
     transcript: body.transcript || call.transcript || '',
+    sentiment_score: sentiment,
     caller_phone: bookingInfo.customerPhone,
     caller_email: bookingInfo.customerEmail,
     appointment_date: bookingInfo.appointmentDate ? new Date(bookingInfo.appointmentDate) : null,
@@ -591,6 +603,22 @@ async function processCallEnd(body, tenantId) {
     .returning('*');
 
   console.log(`✅ Call stored: ${callId} (${duration}s, ${outcome})`);
+
+  // Fire HubSpot lead sync (non-blocking)
+  try {
+    const hubspotService = require('../lib/hubspot-service');
+    if (bookingInfo.customerEmail || bookingInfo.customerPhone) {
+      await hubspotService.upsertLead({
+        email: bookingInfo.customerEmail,
+        phone: bookingInfo.customerPhone,
+        firstname: bookingInfo.customerName?.split(' ')[0] || bookingInfo.customerName,
+        lastname: bookingInfo.customerName?.split(' ').slice(1).join(' ') || '',
+        company: process.env.COMPANY_NAME || 'ChattyAI Client'
+      });
+    }
+  } catch (hsErr) {
+    console.error('HubSpot sync failed:', hsErr.message);
+  }
 
   return storedCall;
 }

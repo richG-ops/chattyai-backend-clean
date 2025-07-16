@@ -39,6 +39,10 @@ services:
         value: "richard.gallagherxyz@gmail.com"
       - key: CRITICAL_ALERTS_ENABLED
         value: "true"
+      - key: GROK_API_KEY
+        sync: false
+      - key: HUBSPOT_API_KEY
+        sync: false
     autoDeploy: true
     
   # Background workers
