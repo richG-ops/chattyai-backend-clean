@@ -4,9 +4,9 @@
   "description": "TheChattyAI Calendar Bot for Voice-Based Appointment Booking",
   "main": "google-calendar-api.js",
   "scripts": {
-    "start": "node index.js",
+    "start": "node src/index.js",
     "start:legacy": "node google-calendar-api.js",
-    "dev": "nodemon index.js",
+    "dev": "nodemon src/index.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:watch": "mocha tests/**/*.test.js --watch",
     "lint": "eslint .",
