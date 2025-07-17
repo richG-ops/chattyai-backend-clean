@@ -18,6 +18,7 @@ const notificationService = require('../lib/notification-service');
 const callDataStorage = require('../lib/call-data-storage');
 const { GoogleCalendarPlugin } = require('./vapi-plugin');
 const vapiWebhookUltimate = require('../routes/vapi-webhook-ultimate');
+const hubspotWebhook     = require('../routes/hubspot-webhook');   // ← NEW
 
 // Initialize Express
 const app = express();
@@ -246,6 +247,9 @@ app.post('/book-appointment', authenticateJWT, async (req, res) => {
 app.post('/webhook', vapiWebhookUltimate);
 app.post('/vapi', vapiWebhookUltimate); // Legacy support
 app.post('/api/v1/webhook', vapiWebhookUltimate); // New standard
+
+// HubSpot webhook (GET for verification, POST for events)
+app.use('/api/v1/hubspot/webhook', hubspotWebhook);     // ← NEW
 
 // Dashboard API endpoints
 // Add route for /api/calls with pagination
