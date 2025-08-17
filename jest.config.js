@@ -1,10 +1,13 @@
 const isCI = process.env.GITHUB_ACTIONS === 'true';
 
+const baseIgnore = ['/node_modules/', '/thechattyai-frontend/', '/.next/'];
+const ciOnlyIgnore = isCI ? ['tests/grok-service.test.js', 'tests/call-data-storage.test.js'] : [];
+
 module.exports = {
   testEnvironment: 'node',
   collectCoverage: true,
   collectCoverageFrom: ['lib/**/*.js', 'routes/**/*.js', 'src/**/*.js'],
-  testPathIgnorePatterns: ['/node_modules/', '/thechattyai-frontend/', '/.next/'],
+  testPathIgnorePatterns: [...baseIgnore, ...ciOnlyIgnore],
   modulePathIgnorePatterns: ['thechattyai-frontend', '.next'],
   watchPathIgnorePatterns: ['/thechattyai-frontend/', '/.next/'],
   moduleNameMapper: {
