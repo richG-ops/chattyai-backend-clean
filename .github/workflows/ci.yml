@@ -1,15 +1,33 @@
 name: CI
-on: [push]
+on:
+  push:
+    branches:
+      - main
+      - feat/**
+  pull_request:
+    branches:
+      - main
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions/setup-node@v2
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
       with: 
         node-version: '18'
-    - run: npm install
-    - run: npm test -- --passWithNoTests
-    - run: npm install -g aws-cdk
-    - run: cdk --version
-    - run: cdk synth || echo "CDK synth skipped - no CDK app found" 
+        cache: 'npm'
+    - run: npm ci
+    - name: Run tests
+      run: npm test -- --passWithNoTests
+      env:
+        # avoid require-time crashes in any legacy codepaths
+        CALENDAR_API_URL: http://localhost
+    - name: Skip CDK on PR branches
+      if: github.ref != 'refs/heads/main'
+      run: echo "Skipping CDK steps for non-main branches"
+    - name: CDK version
+      if: github.ref == 'refs/heads/main'
+      run: |
+        npm install -g aws-cdk
+        cdk --version
+        cdk synth || echo "CDK synth skipped - no CDK app found"
