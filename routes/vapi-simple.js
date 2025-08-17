@@ -71,8 +71,24 @@ router.post('/', async (req, res) => {
               endLocal: human(endISO, TENANT_TZ),
             };
           });
-        } catch (e) {
-          console.error('getAvailability error', e?.message || e);
+        } catch (err) {
+          console.error('getAvailability error', err?.message || err);
+          if (err?.code === 'CONFIG') {
+            return res.status(200).json({
+              response: 'I couldn’t reach the scheduling system yet. Let me take your preferred time and we’ll confirm by text.',
+              data: { ok: false, reason: 'calendar_not_configured' }
+            });
+          }
+          if (err?.code === 'UPSTREAM') {
+            return res.status(200).json({
+              response: 'Calendar is busy right now. Want me to try a different time or text you options?',
+              data: { ok: false, reason: 'calendar_unavailable' }
+            });
+          }
+          return res.status(200).json({
+            response: 'Something went wrong on my end. Want to try another time?',
+            data: { ok: false, error: 'internal' }
+          });
         }
 
         const say = slots.length
@@ -111,8 +127,24 @@ router.post('/', async (req, res) => {
         let result = {};
         try {
           result = await bookAppointment(payload);
-        } catch (e) {
-          console.error('bookAppointment error', e?.message || e);
+        } catch (err) {
+          console.error('bookAppointment error', err?.message || err);
+          if (err?.code === 'CONFIG') {
+            return res.status(200).json({
+              response: 'I couldn’t reach the scheduling system yet. Let me take your preferred time and we’ll confirm by text.',
+              data: { ok: false, reason: 'calendar_not_configured' }
+            });
+          }
+          if (err?.code === 'UPSTREAM') {
+            return res.status(200).json({
+              response: 'Calendar is busy right now. Want me to try a different time or text you options?',
+              data: { ok: false, reason: 'calendar_unavailable' }
+            });
+          }
+          return res.status(200).json({
+            response: 'Something went wrong on my end. Want to try another time?',
+            data: { ok: false, error: 'internal' }
+          });
         }
 
         const confirmedStart = result.startISO || startISO;
