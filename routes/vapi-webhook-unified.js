@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db-config');
 const crypto = require('crypto');
-const { v4: uuidv4 } = require('uuid');
+const { newId } = require('../lib/id');
 
 // Twilio SMS setup
 const twilio = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
@@ -39,7 +39,7 @@ function verifyVapiSignature(req, res, next) {
 // Main webhook handler - processes VAPI calls and stores data
 router.post('/', verifyVapiSignature, async (req, res) => {
   const startTime = Date.now();
-  const webhookId = uuidv4().slice(0, 8);
+  const webhookId = newId().slice(0, 8);
   
   console.log(`🔌 [${webhookId}] VAPI webhook received:`, {
     type: req.body.type,

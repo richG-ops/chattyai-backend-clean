@@ -28,7 +28,8 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'development-secret-change-in-production';
 const DATABASE_URL = process.env.DATABASE_URL;
-const REDIS_URL = process.env.REDIS_URL;
+const { getRedisUrl } = require('../lib/redis');
+const REDIS_URL = getRedisUrl(['QUEUE_REDIS_URL', 'BULL_REDIS_URL']);
 const VAPI_WEBHOOK_SECRET = process.env.VAPI_WEBHOOK_SECRET;
 
 // Initialize Sentry for production monitoring

@@ -1,4 +1,5 @@
 const redis = require('redis');
+const { getRedisUrl } = require('../lib/redis');
 
 /**
  * Production-ready rate limiting middleware
@@ -10,9 +11,9 @@ const memoryStore = new Map();
 
 // Redis client setup
 let redisClient;
-if (process.env.REDIS_URL) {
+if (getRedisUrl(['RATE_LIMIT_REDIS_URL'])) {
   redisClient = redis.createClient({
-    url: process.env.REDIS_URL,
+    url: getRedisUrl(['RATE_LIMIT_REDIS_URL']),
     socket: {
       connectTimeout: 5000,
       reconnectStrategy: (retries) => {

@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const { getDb } = require('../db-config');
 const { getCallDataStorage } = require('../lib/call-data-storage');
 
-const { v4: uuidv4 } = require('uuid');
+const { newId } = require('../lib/id');
 const { DateTime } = require('luxon');
 const { addBookingJob, addAnalyticsJob, addNotificationJob, PRIORITIES } = require('../lib/job-queue');
 
@@ -50,7 +50,7 @@ const validateWebhookSignature = (req, res, next) => {
 const idempotencyMiddleware = async (req, res, next) => {
   const requestId = req.headers['x-vapi-request-id'] || 
                    req.headers['x-request-id'] || 
-                   uuidv4();
+                   newId();
   
   req.requestId = requestId;
   const db = req.db || getDb();
@@ -679,7 +679,7 @@ async function handleLeadQualification(params, aiEmployee, call) {
   
   try {
     const leadData = {
-      lead_id: uuidv4(),
+      lead_id: newId(),
       name: params.name,
       phone: params.phone,
       email: params.email,

@@ -10,7 +10,7 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
-const { v4: uuidv4 } = require('uuid');
+const { newId } = require('../lib/id');
 const { DateTime } = require('luxon');
 
 // Database connection
@@ -34,7 +34,7 @@ try {
       create: async (opts) => {
         console.log(`📱 [MOCK SMS] To: ${opts.to}`);
         console.log(`📱 [MOCK SMS] Message: ${opts.body}`);
-        return { sid: 'mock_' + uuidv4(), status: 'mock' };
+        return { sid: 'mock_' + newId(), status: 'mock' };
       }
     }
   };
@@ -511,7 +511,7 @@ async function handleFunctionCall(body, tenantId) {
       // Store booking
       const db = getDb();
       const booking = await db('bookings').insert({
-        booking_id: uuidv4(),
+        booking_id: newId(),
         tenant_id: tenantId,
         customer_name: bookingInfo.customerName,
         customer_phone: bookingInfo.customerPhone,
@@ -552,7 +552,7 @@ async function handleFunctionCall(body, tenantId) {
 async function processCallEnd(body, tenantId) {
   const db = getDb();
   const call = body.call || {};
-  const callId = call.id || uuidv4();
+  const callId = call.id || newId();
 
   // Calculate duration
   let duration = 0;

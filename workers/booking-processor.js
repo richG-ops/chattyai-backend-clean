@@ -1,5 +1,5 @@
 const { getDb } = require('../db-config');
-const { v4: uuidv4 } = require('uuid');
+const { newId } = require('../lib/id');
 const { DateTime } = require('luxon');
 const googleCalendarApi = require('../google-calendar-api');
 const { addNotificationJob, addAnalyticsJob, logAuditEvent } = require('../lib/job-queue'); // Add this import
@@ -25,7 +25,7 @@ const processBooking = async (job) => {
     if (!customer) {
       // Create new customer
       const [newCustomer] = await transaction('customers').insert({
-        customer_id: uuidv4(),
+        customer_id: newId(),
         name: data.customerName,
         phone: data.customerPhone,
         email: data.customerEmail,
@@ -65,7 +65,7 @@ const processBooking = async (job) => {
     
     // 3. Create booking record
     const [booking] = await transaction('bookings').insert({
-      booking_id: uuidv4(),
+      booking_id: newId(),
       customer_id: customer.id,
       tenant_id: data.tenantId,
       service_type: data.serviceType,
