@@ -40,29 +40,7 @@ try {
   };
 }
 
-// Initialize SendGrid
-try {
-  if (process.env.SENDGRID_API_KEY) {
-    sgMail = require('@sendgrid/mail');
-    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-    console.log('✅ SendGrid initialized successfully');
-  } else {
-    throw new Error('Missing SendGrid API key');
-  }
-} catch (error) {
-  console.warn('⚠️  SendGrid initialization failed - Email will be mocked:', error.message);
-  sgMail = {
-    send: async (messages) => {
-      const msgs = Array.isArray(messages) ? messages : [messages];
-      msgs.forEach(msg => {
-        console.log(`📧 [MOCK EMAIL] To: ${msg.to}`);
-        console.log(`📧 [MOCK EMAIL] Subject: ${msg.subject}`);
-        console.log(`📧 [MOCK EMAIL] Text: ${msg.text}`);
-      });
-      return [{ statusCode: 202, headers: {} }];
-    }
-  };
-}
+const { sendEmail, emailEnabled } = require('../lib/email');
 
 // ============================================================================
 // MIDDLEWARE
@@ -310,7 +288,7 @@ async function sendDualNotifications(bookingInfo, callData) {
   // Customer Email
   if (bookingInfo.customerEmail) {
     try {
-      await sgMail.send({
+      await sendEmail({
         to: bookingInfo.customerEmail,
         from: 'noreply@chattyai.com',
         subject: bookingInfo.appointmentDate ? 'Appointment Confirmation' : 'Thank you for calling',
@@ -339,7 +317,7 @@ async function sendDualNotifications(bookingInfo, callData) {
   // Owner Email
   if (ownerEmail) {
     try {
-      await sgMail.send({
+      await sendEmail({
         to: ownerEmail,
         from: 'alerts@chattyai.com',
         subject: bookingInfo.appointmentDate ? '🔔 New Booking Alert' : '🔔 New Call Alert',

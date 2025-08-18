@@ -8,9 +8,8 @@ const { newId } = require('../lib/id');
 // Twilio SMS setup
 const twilio = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 
-// SendGrid email setup
-const sgMail = require('@sendgrid/mail');
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+// Email adapter (optional)
+const { sendEmail, emailEnabled } = require('../lib/email');
 
 // HMAC signature verification middleware
 function verifyVapiSignature(req, res, next) {
@@ -195,7 +194,7 @@ View details: ${process.env.DASHBOARD_URL || 'Dashboard'}`;
         const emailPromises = [];
 
         // Customer confirmation email
-        emailPromises.push(sgMail.send({
+        emailPromises.push(sendEmail({
           to: caller_email,
           from: process.env.FROM_EMAIL || 'no-reply@chattyai.com',
           subject: `Appointment Confirmed - ${service_type || 'Service'}`,
@@ -222,7 +221,7 @@ View details: ${process.env.DASHBOARD_URL || 'Dashboard'}`;
         }));
 
         // Business owner notification email
-        emailPromises.push(sgMail.send({
+        emailPromises.push(sendEmail({
           to: owner_email,
           from: process.env.FROM_EMAIL || 'no-reply@chattyai.com',
           subject: `🔔 New Booking: ${customer_name || 'Customer'} - ${service_type || 'Service'}`,
