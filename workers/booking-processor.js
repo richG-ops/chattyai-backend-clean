@@ -1,15 +1,5 @@
 const { getDb } = require('../db-config');
-// Resilient UUID import with fallback (Senior Dev Team Fix)
-let uuidv4;
-try {
-  const uuid = require('uuid');
-  uuidv4 = uuid.v4;
-  console.log('✅ Booking Processor: UUID v4 loaded successfully');
-} catch (e) {
-  console.error('❌ Booking Processor: UUID load error:', e.message);
-  console.log('🔄 Booking Processor: Using crypto.randomUUID fallback');
-  uuidv4 = () => require('crypto').randomUUID();  // Node builtin fallback
-}
+const { v4: uuidv4 } = require('uuid');
 const { DateTime } = require('luxon');
 const googleCalendarApi = require('../google-calendar-api');
 const { addNotificationJob, addAnalyticsJob, logAuditEvent } = require('../lib/job-queue'); // Add this import

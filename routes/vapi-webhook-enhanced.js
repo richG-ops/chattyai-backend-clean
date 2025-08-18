@@ -4,17 +4,7 @@ const crypto = require('crypto');
 const { getDb } = require('../db-config');
 const { getCallDataStorage } = require('../lib/call-data-storage');
 
-// Resilient UUID import with fallback (Senior Dev Team Fix)
-let uuidv4;
-try {
-  const uuid = require('uuid');
-  uuidv4 = uuid.v4;
-  console.log('✅ VAPI Webhook: UUID v4 loaded successfully');
-} catch (e) {
-  console.error('❌ VAPI Webhook: UUID load error:', e.message);
-  console.log('🔄 VAPI Webhook: Using crypto.randomUUID fallback');
-  uuidv4 = () => require('crypto').randomUUID();  // Node builtin fallback
-}
+const { v4: uuidv4 } = require('uuid');
 const { DateTime } = require('luxon');
 const { addBookingJob, addAnalyticsJob, addNotificationJob, PRIORITIES } = require('../lib/job-queue');
 
