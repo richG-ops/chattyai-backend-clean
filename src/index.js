@@ -249,6 +249,15 @@ app.post('/webhook', vapiWebhookUltimate);
 app.post('/vapi', vapiWebhookUltimate); // Legacy support
 app.post('/api/v1/webhook', vapiWebhookUltimate); // New standard
 
+// Twilio recording callback + followups
+try {
+  app.use('/twilio', require('../routes/twilio-recording'));
+  app.use('/followups', require('../routes/followups'));
+  console.log('✅ Twilio + followups routes mounted');
+} catch (e) {
+  console.warn('⚠️  Failed to mount Twilio/Followups routes:', e.message);
+}
+
 // HubSpot webhook (GET for verification, POST for events)
 app.use('/api/v1/hubspot/webhook', hubspotWebhook);     // ← NEW
 
