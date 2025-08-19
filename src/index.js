@@ -274,6 +274,14 @@ try {
   console.warn('⚠️  Failed to mount public API routes:', e.message);
 }
 
+// Simple VAPI (calendar-backed) for availability/booking
+try {
+  app.use('/vapi', require('../routes/vapi-simple'));
+  console.log('✅ VAPI simple routes mounted');
+} catch (e) {
+  console.warn('⚠️  Failed to mount VAPI simple routes:', e.message);
+}
+
 // HubSpot webhook (GET for verification, POST for events)
 app.use('/api/v1/hubspot/webhook', hubspotWebhook);     // ← NEW
 
