@@ -56,7 +56,15 @@ const redis = REDIS_URL ? new Redis(REDIS_URL) : null;
 const notificationQueue = redis ? new Bull('notifications', REDIS_URL) : null;
 
 // Middleware
+// Sentry
 app.use(Sentry.Handlers.requestHandler());
+// Pino HTTP logging (optional)
+try {
+  const { buildLogger } = require('../lib/logging');
+  app.use(buildLogger());
+} catch (e) {
+  console.warn('Logging middleware not available:', e.message);
+}
 app.use(helmet()); // Security headers
 app.use(cors({
   origin: process.env.ALLOWED_ORIGINS?.split(',') || '*',
@@ -256,6 +264,14 @@ try {
   console.log('✅ Twilio + followups routes mounted');
 } catch (e) {
   console.warn('⚠️  Failed to mount Twilio/Followups routes:', e.message);
+}
+
+// Public frontend API
+try {
+  app.use('/api', require('../routes/public'));
+  console.log('✅ Public API routes mounted');
+} catch (e) {
+  console.warn('⚠️  Failed to mount public API routes:', e.message);
 }
 
 // HubSpot webhook (GET for verification, POST for events)
