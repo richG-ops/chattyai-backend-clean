@@ -5,6 +5,7 @@
   "main": "google-calendar-api.js",
   "scripts": {
     "start": "node src/index.js",
+    "ensure:schema": "node scripts/ensure-schema.js",
     "start:legacy": "node google-calendar-api.js",
     "dev": "nodemon src/index.js",
     "test": "jest --coverage",
