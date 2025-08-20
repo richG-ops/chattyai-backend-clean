@@ -15,6 +15,7 @@
     "migrate:rollback": "knex migrate:rollback",
     "migrate:status": "knex migrate:status",
     "smoke-test": "node tests/smoke-test.js",
+    "smoke:staging": "node scripts/smoke-staging.js",
     "deploy": "git push origin main",
     "prestart": "npm run smoke-test"
   },

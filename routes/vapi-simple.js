@@ -4,6 +4,7 @@ const router = express.Router();
 const { getAvailability, bookAppointment } = require('../lib/calendarClient');
 const { DateTime } = require('luxon');
 const { human, addMinutes } = require('../lib/time');
+const { setUpstreamStatus } = require('../lib/logging');
 
 const TENANT_TZ = process.env.TENANT_TZ || 'America/Los_Angeles';
   
@@ -42,12 +43,15 @@ async function sendSMS(to, message) {
 // Simple VAPI endpoint for voice AI integration
 // No authentication required for basic functionality
 router.post('/', async (req, res) => {
+  const requestId = req.headers['x-vapi-request-id'] || `vapi-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  
   try {
     const { function: functionName, parameters } = req.body;
     
     console.log('🎙️ VAPI Simple called:', { 
       functionName, 
       parameters,
+      requestId,
       timestamp: new Date().toISOString()
     });
     
@@ -74,20 +78,50 @@ router.post('/', async (req, res) => {
         } catch (err) {
           console.error('getAvailability error', err?.message || err);
           if (err?.code === 'CONFIG') {
+            setUpstreamStatus(res, 'CONFIG_ERROR', 'calendar_availability');
             return res.status(200).json({
-              response: 'I couldn’t reach the scheduling system yet. Let me take your preferred time and we’ll confirm by text.',
-              data: { ok: false, reason: 'calendar_not_configured' }
+              response: 'I couldn\'t reach the scheduling system yet. Let me take your preferred time and we\'ll confirm by text.',
+              data: { ok: false, reason: 'calendar_not_configured' },
+              requestId
             });
           }
-          if (err?.code === 'UPSTREAM') {
+          if (err?.code === 'UPSTREAM_CALENDAR_401') {
+            setUpstreamStatus(res, 'UPSTREAM_401', 'calendar_availability');
             return res.status(200).json({
-              response: 'Calendar is busy right now. Want me to try a different time or text you options?',
-              data: { ok: false, reason: 'calendar_unavailable' }
+              response: 'Calendar authentication failed. Let me take your preferred time and we\'ll confirm by text.',
+              data: { ok: false, reason: 'calendar_auth_failed' },
+              requestId
             });
           }
+          if (err?.code === 'UPSTREAM_CALENDAR_404') {
+            setUpstreamStatus(res, 'UPSTREAM_404', 'calendar_availability');
+            return res.status(200).json({
+              response: 'Calendar service not found. Let me take your preferred time and we\'ll confirm by text.',
+              data: { ok: false, reason: 'calendar_not_found' },
+              requestId
+            });
+          }
+          if (err?.code === 'UPSTREAM_CALENDAR_UNREACHABLE') {
+            setUpstreamStatus(res, 'UPSTREAM_UNREACHABLE', 'calendar_availability');
+            return res.status(200).json({
+              response: 'Calendar service is unreachable. Let me take your preferred time and we\'ll confirm by text.',
+              data: { ok: false, reason: 'calendar_unreachable' },
+              requestId
+            });
+          }
+          if (err?.code === 'UPSTREAM_CALENDAR_UNKNOWN') {
+            setUpstreamStatus(res, 'UPSTREAM_UNKNOWN', 'calendar_availability');
+            return res.status(200).json({
+              response: 'Calendar service error. Let me take your preferred time and we\'ll confirm by text.',
+              data: { ok: false, reason: 'calendar_error' },
+              requestId
+            });
+          }
+          setUpstreamStatus(res, 'INTERNAL_ERROR', 'calendar_availability');
           return res.status(200).json({
             response: 'Something went wrong on my end. Want to try another time?',
-            data: { ok: false, error: 'internal' }
+            data: { ok: false, error: 'internal' },
+            requestId
           });
         }
 
@@ -95,7 +129,7 @@ router.post('/', async (req, res) => {
           ? `I found ${slots.length} openings. Earliest is ${slots[0].startLocal}. Want that one?`
           : `No openings in the next week. Want me to check another day?`;
 
-        response = { response: say, data: { slots } };
+        response = { response: say, data: { slots }, requestId };
         break;
       }
         
@@ -107,6 +141,7 @@ router.post('/', async (req, res) => {
           response = {
             response: 'What time should I book it for?',
             data: { ok: false, reason: 'missing_start' },
+            requestId
           };
           break;
         }
@@ -130,20 +165,50 @@ router.post('/', async (req, res) => {
         } catch (err) {
           console.error('bookAppointment error', err?.message || err);
           if (err?.code === 'CONFIG') {
+            setUpstreamStatus(res, 'CONFIG_ERROR', 'calendar_booking');
             return res.status(200).json({
-              response: 'I couldn’t reach the scheduling system yet. Let me take your preferred time and we’ll confirm by text.',
-              data: { ok: false, reason: 'calendar_not_configured' }
+              response: 'I couldn\'t reach the scheduling system yet. Let me take your preferred time and we\'ll confirm by text.',
+              data: { ok: false, reason: 'calendar_not_configured' },
+              requestId
             });
           }
-          if (err?.code === 'UPSTREAM') {
+          if (err?.code === 'UPSTREAM_CALENDAR_401') {
+            setUpstreamStatus(res, 'UPSTREAM_401', 'calendar_booking');
             return res.status(200).json({
-              response: 'Calendar is busy right now. Want me to try a different time or text you options?',
-              data: { ok: false, reason: 'calendar_unavailable' }
+              response: 'Calendar authentication failed. Let me take your preferred time and we\'ll confirm by text.',
+              data: { ok: false, reason: 'calendar_auth_failed' },
+              requestId
             });
           }
+          if (err?.code === 'UPSTREAM_CALENDAR_404') {
+            setUpstreamStatus(res, 'UPSTREAM_404', 'calendar_booking');
+            return res.status(200).json({
+              response: 'Calendar service not found. Let me take your preferred time and we\'ll confirm by text.',
+              data: { ok: false, reason: 'calendar_not_found' },
+              requestId
+            });
+          }
+          if (err?.code === 'UPSTREAM_CALENDAR_UNREACHABLE') {
+            setUpstreamStatus(res, 'UPSTREAM_UNREACHABLE', 'calendar_booking');
+            return res.status(200).json({
+              response: 'Calendar service is unreachable. Let me take your preferred time and we\'ll confirm by text.',
+              data: { ok: false, reason: 'calendar_unreachable' },
+              requestId
+            });
+          }
+          if (err?.code === 'UPSTREAM_CALENDAR_UNKNOWN') {
+            setUpstreamStatus(res, 'UPSTREAM_UNKNOWN', 'calendar_booking');
+            return res.status(200).json({
+              response: 'Calendar service error. Let me take your preferred time and we\'ll confirm by text.',
+              data: { ok: false, reason: 'calendar_error' },
+              requestId
+            });
+          }
+          setUpstreamStatus(res, 'INTERNAL_ERROR', 'calendar_booking');
           return res.status(200).json({
             response: 'Something went wrong on my end. Want to try another time?',
-            data: { ok: false, error: 'internal' }
+            data: { ok: false, error: 'internal' },
+            requestId
           });
         }
 
@@ -155,6 +220,7 @@ router.post('/', async (req, res) => {
         response = {
           response: say,
           data: { confirmation: { id: confId, startISO: confirmedStart, endISO } },
+          requestId
         };
         break;
       }
@@ -167,7 +233,8 @@ router.post('/', async (req, res) => {
           response = {
             response: "I need both a phone number and message to send an SMS. Please provide both.",
             success: false,
-            error: "Missing required parameters"
+            error: "Missing required parameters",
+            requestId
           };
           break;
         }
@@ -175,7 +242,8 @@ router.post('/', async (req, res) => {
         // Log SMS attempt
         console.log('📱 Sending SMS:', {
           phoneNumber,
-          message: message.substring(0, 50) + (message.length > 50 ? '...' : '')
+          message: message.substring(0, 50) + (message.length > 50 ? '...' : ''),
+          requestId
         });
         
         // Send the SMS
@@ -186,13 +254,15 @@ router.post('/', async (req, res) => {
             response: `SMS sent successfully to ${phoneNumber}! ${smsResult.simulated ? '(This was a simulation since Twilio is not configured)' : ''}`,
             success: true,
             messageId: smsResult.messageId,
-            simulated: smsResult.simulated || false
+            simulated: smsResult.simulated || false,
+            requestId
           };
         } else {
           response = {
             response: `I'm sorry, I couldn't send the SMS to ${phoneNumber}. ${smsResult.error || 'Please check the phone number and try again.'}`,
             success: false,
-            error: smsResult.error
+            error: smsResult.error,
+            requestId
           };
         }
         break;
@@ -208,14 +278,16 @@ router.post('/', async (req, res) => {
             friday: '9:00 AM - 5:00 PM',
             saturday: '10:00 AM - 2:00 PM',
             sunday: 'Closed'
-          }
+          },
+          requestId
         };
         break;
         
       default:
         response = {
           response: "Hello! I'm your AI assistant. I can help you check availability, book appointments, send SMS messages, or answer questions about our business hours. What would you like to do?",
-          capabilities: ['checkAvailability', 'bookAppointment', 'sendSMS', 'getBusinessHours']
+          capabilities: ['checkAvailability', 'bookAppointment', 'sendSMS', 'getBusinessHours'],
+          requestId
         };
     }
     
@@ -228,7 +300,8 @@ router.post('/', async (req, res) => {
     // Return graceful error for voice AI
     res.status(200).json({
       response: "I'm having a brief technical issue. Please try again in a moment.",
-      error: false // Don't expose errors to voice AI
+      error: false, // Don't expose errors to voice AI
+      requestId
     });
   }
 });

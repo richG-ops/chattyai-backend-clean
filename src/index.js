@@ -13,6 +13,13 @@ const Bull = require('bull');
 const Sentry = require('@sentry/node');
 const { DateTime } = require('luxon');
 
+// Print configuration early
+try {
+  require('../scripts/print-config').printConfig();
+} catch (e) {
+  console.warn('⚠️  Configuration print failed:', e.message);
+}
+
 // Elite modules
 const notificationService = require('../lib/notification-service');
 const callDataStorage = require('../lib/call-data-storage');
@@ -279,6 +286,14 @@ try {
   console.log('✅ Dev routes mounted');
 } catch (e) {
   console.warn('⚠️  Failed to mount dev routes:', e.message);
+}
+
+// Debug routes (when DEBUG_API_KEY is set)
+try {
+  app.use('/debug', require('../routes/debug-calendar'));
+  console.log('✅ Debug routes mounted');
+} catch (e) {
+  console.warn('⚠️  Failed to mount debug routes:', e.message);
 }
 
 // Simple VAPI (calendar-backed) for availability/booking
