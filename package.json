@@ -17,6 +17,7 @@
     "smoke-test": "node tests/smoke-test.js",
     "smoke:staging": "node scripts/smoke-staging.js",
     "mint:jwt": "node scripts/mint-tenant-jwt.js",
+    "mint:jwt:manual": "node scripts/mint-jwt-manual.js",
     "deploy": "git push origin main",
     "prestart": "npm run smoke-test"
   },
