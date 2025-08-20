@@ -273,6 +273,14 @@ try {
   console.warn('⚠️  Failed to mount public API routes:', e.message);
 }
 
+// Dev-only utilities
+try {
+  app.use('/dev', require('../routes/dev'));
+  console.log('✅ Dev routes mounted');
+} catch (e) {
+  console.warn('⚠️  Failed to mount dev routes:', e.message);
+}
+
 // Simple VAPI (calendar-backed) for availability/booking
 try {
   app.use('/vapi', require('../routes/vapi-simple'));
