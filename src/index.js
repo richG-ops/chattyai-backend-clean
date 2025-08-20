@@ -254,7 +254,6 @@ app.post('/book-appointment', authenticateJWT, async (req, res) => {
 
 // Unified VAPI webhook endpoint - Ultimate version
 app.post('/webhook', vapiWebhookUltimate);
-app.post('/vapi', vapiWebhookUltimate); // Legacy support
 app.post('/api/v1/webhook', vapiWebhookUltimate); // New standard
 
 // Twilio recording callback + followups
