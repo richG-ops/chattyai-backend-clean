@@ -107,8 +107,16 @@ function printConfig() {
   
   // Critical Calendar Configuration
   logSection('Calendar Configuration (Critical)');
-  const calendarUrl = checkEnvironmentVariable('CALENDAR_API_URL', 'Calendar API URL', true);
-  const calendarJwt = checkEnvironmentVariable('TENANT_JWT', 'Tenant JWT Token', false);
+  const provider = (process.env.CALENDAR_PROVIDER || process.env.CAL_PROVIDER || process.env.PROVIDER || 'legacy');
+  logConfig('CALENDAR_PROVIDER', provider, 'info');
+  if ((provider || '').toLowerCase() === 'calcom') {
+    const calBase = checkEnvironmentVariable('CAL_API_BASE', 'Cal.com API Base', false);
+    const calKey = checkEnvironmentVariable('CAL_API_KEY', 'Cal.com API Key', true);
+    const calEvent = checkEnvironmentVariable('CAL_EVENT_TYPE_ID', 'Cal.com Event Type Id', true);
+  } else {
+    const calendarUrl = checkEnvironmentVariable('CALENDAR_API_URL', 'Calendar API URL', true);
+    const calendarJwt = checkEnvironmentVariable('TENANT_JWT', 'Tenant JWT Token', false);
+  }
   const calendarTz = checkEnvironmentVariable('TENANT_TZ', 'Tenant Timezone', false);
   
   // Database Configuration
@@ -136,7 +144,9 @@ function printConfig() {
   
   // Summary
   logSection('Configuration Summary');
-  const criticalVars = ['CALENDAR_API_URL', 'DATABASE_URL'];
+  const criticalVars = ((provider || '').toLowerCase() === 'calcom')
+    ? ['CAL_API_KEY', 'CAL_EVENT_TYPE_ID', 'DATABASE_URL']
+    : ['CALENDAR_API_URL', 'DATABASE_URL'];
   const criticalCount = criticalVars.filter(key => !!process.env[key]).length;
   const totalCritical = criticalVars.length;
   

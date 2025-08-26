@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { health, availability, hasJWT, getBaseURL } = require('../lib/calendarClient');
+const calendarClient = require('../lib/calendarClient');
 
 // Middleware to check debug API key
 function requireDebugKey(req, res, next) {
@@ -31,35 +31,44 @@ router.get('/calendar', async (req, res) => {
   try {
     console.log('🔍 Debug calendar diagnostics requested');
     
-    // Get basic config info
-    const baseUrl = getBaseURL();
-    const hasJwt = hasJWT();
+    const provider = calendarClient.providerName;
+    const isCalcom = provider === 'calcom';
+    const baseUrl = isCalcom ? null : (process.env.CALENDAR_API_URL || null);
+    const hasJwt = isCalcom ? false : !!(process.env.TENANT_JWT || process.env.CALENDAR_JWT);
+    const hasKey = isCalcom ? !!process.env.CAL_API_KEY : !!(process.env.TENANT_JWT || process.env.CALENDAR_JWT);
     
     // Test calendar health
-    const healthResult = await health();
+    let healthResult;
+    try {
+      const probe = await calendarClient.availability({ limit: 1 });
+      const slotsFound = Array.isArray(probe) ? probe.length : (probe?.slots?.length || 0);
+      healthResult = { ok: true, status: 200, data: { slotsFound } };
+    } catch (e) {
+      healthResult = { ok: false, status: e?.code || e?.response?.status || 'error', error: e?.message };
+    }
     
     // Test availability (with minimal params)
     let availabilityResult = { ok: false, status: 'not_tested' };
-    if (baseUrl) {
-      try {
-        const avail = await availability({ limit: 1 });
-        availabilityResult = { 
-          ok: true, 
-          status: 'success',
-          slotsFound: Array.isArray(avail) ? avail.length : (avail.slots?.length || 0)
-        };
-      } catch (err) {
-        availabilityResult = { 
-          ok: false, 
-          status: err.code || 'error',
-          error: err.message
-        };
-      }
+    try {
+      const avail = await calendarClient.availability({ limit: 1 });
+      availabilityResult = { 
+        ok: true, 
+        status: 'success',
+        slotsFound: Array.isArray(avail) ? avail.length : (avail.slots?.length || 0)
+      };
+    } catch (err) {
+      availabilityResult = { 
+        ok: false, 
+        status: err.code || 'error',
+        error: err.message
+      };
     }
     
     const diagnostics = {
+      provider: isCalcom ? 'calcom' : 'legacy',
       baseUrl: baseUrl || 'not_set',
       hasJwt,
+      hasKey,
       health: healthResult,
       availability: availabilityResult,
       timestamp: new Date().toISOString(),
@@ -67,8 +76,10 @@ router.get('/calendar', async (req, res) => {
     };
     
     console.log('🔍 Calendar diagnostics:', {
-      baseUrl: baseUrl ? `${baseUrl.split('/')[0]}//${baseUrl.split('/')[2]}/...` : 'none',
+      baseUrl: baseUrl ? `${String(baseUrl).split('/')[0]}//${String(baseUrl).split('/')[2]}/...` : 'none',
+      provider: diagnostics.provider,
       hasJwt,
+      hasKey,
       healthOk: healthResult.ok,
       availabilityOk: availabilityResult.ok
     });

@@ -486,6 +486,12 @@ process.on('SIGINT', gracefulShutdown);
 
 // Start server
 const server = app.listen(PORT, () => {
+  try {
+    const prov = require('../lib/calendarClient').providerName;
+    console.info(`[boot] calendar.provider=${prov}`);
+  } catch (e) {
+    console.warn('[boot] calendar.provider log failed:', e.message);
+  }
   console.log(`🚀 TheChattyAI Elite Backend running on port ${PORT}`);
   console.log(`📊 Environment: ${NODE_ENV}`);
   console.log(`🔐 JWT Auth: ${JWT_SECRET ? 'Configured' : 'Using default (UNSAFE)'}`);
