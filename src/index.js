@@ -492,6 +492,14 @@ const server = app.listen(PORT, () => {
   } catch (e) {
     console.warn('[boot] calendar.provider log failed:', e.message);
   }
+  if (process.env.NOTIFY_SMS === 'true') {
+    try {
+      require('../workers/notifications');
+      console.log('✅ Notifications worker loaded');
+    } catch (e) {
+      console.warn('notifications worker not loaded:', e.message);
+    }
+  }
   console.log(`🚀 TheChattyAI Elite Backend running on port ${PORT}`);
   console.log(`📊 Environment: ${NODE_ENV}`);
   console.log(`🔐 JWT Auth: ${JWT_SECRET ? 'Configured' : 'Using default (UNSAFE)'}`);

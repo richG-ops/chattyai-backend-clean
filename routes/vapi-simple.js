@@ -5,6 +5,7 @@ const { getAvailability, bookAppointment } = require('../lib/calendarClient');
 const { DateTime } = require('luxon');
 const { human, addMinutes } = require('../lib/time');
 const { setUpstreamStatus } = require('../lib/logging');
+const { enqueueNow, enqueueAt } = (() => { try { return require('../lib/queues/notifications'); } catch (_) { return {}; } })();
 
 const TENANT_TZ = process.env.TENANT_TZ || 'America/Los_Angeles';
   
@@ -162,6 +163,23 @@ router.post('/', async (req, res) => {
         let result = {};
         try {
           result = await bookAppointment(payload);
+          // Enqueue confirmations/reminders if enabled
+          const notificationsEnabled = process.env.NOTIFY_SMS === 'true';
+          const toPhone = parameters?.phone || parameters?.customer?.phone;
+          if (notificationsEnabled && enqueueNow && toPhone && result?.startISO) {
+            const start = DateTime.fromISO(result.startISO, { zone: 'utc' }).setZone(TENANT_TZ);
+            const friendly = start.toFormat("EEE, MMM d 'at' h:mm a");
+            await enqueueNow({ to: toPhone, text: `Your appointment is confirmed for ${friendly}. Reply STOP to opt out.` });
+
+            if (process.env.REMINDER_24H === 'true') {
+              const t24 = start.minus({ hours: 24 });
+              if (t24 > DateTime.now()) await enqueueAt({ to: toPhone, text: `Reminder: your appointment is tomorrow at ${friendly}.`, sendAtISO: t24.toUTC().toISO() });
+            }
+            if (process.env.REMINDER_2H === 'true') {
+              const t2 = start.minus({ hours: 2 });
+              if (t2 > DateTime.now()) await enqueueAt({ to: toPhone, text: `Reminder: your appointment is in 2 hours (${friendly}).`, sendAtISO: t2.toUTC().toISO() });
+            }
+          }
         } catch (err) {
           console.error('bookAppointment error', err?.message || err);
           if (err?.code === 'CONFIG') {
