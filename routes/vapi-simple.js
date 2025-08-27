@@ -126,11 +126,7 @@ router.post('/', async (req, res) => {
           });
         }
 
-        const say = slots.length
-          ? `I found ${slots.length} openings. Earliest is ${slots[0].startLocal}. Want that one?`
-          : `No openings in the next week. Want me to check another day?`;
-
-        response = { response: say, data: { slots }, requestId };
+        response = { ok: true, data: { slots }, requestId };
         break;
       }
         
@@ -162,7 +158,32 @@ router.post('/', async (req, res) => {
 
         let result = {};
         try {
-          result = await bookAppointment(payload);
+          // Idempotency via X-Idempotency-Key if provided
+          const idemKey = req.headers['x-idempotency-key'];
+          const redisUrl = process.env.REDIS_URL || process.env.QUEUE_REDIS_URL || process.env.BULL_REDIS_URL;
+          if (idemKey && redisUrl) {
+            try {
+              const { createClient } = require('redis');
+              const rc = createClient({ url: redisUrl });
+              await rc.connect();
+              const cached = await rc.get(`idem:${idemKey}`);
+              if (cached) {
+                const parsed = JSON.parse(cached);
+                await rc.disconnect();
+                response = { ok: true, data: parsed, requestId };
+                break;
+              }
+              result = await bookAppointment(payload);
+              const store = { bookingId: result.confirmationId || result.id, startISO: result.startISO, endISO: result.endISO };
+              await rc.setEx(`idem:${idemKey}`, 3600, JSON.stringify(store));
+              await rc.disconnect();
+            } catch (rErr) {
+              console.warn('idempotency unavailable:', rErr.message);
+              result = await bookAppointment(payload);
+            }
+          } else {
+            result = await bookAppointment(payload);
+          }
           // Enqueue confirmations/reminders if enabled
           const notificationsEnabled = process.env.NOTIFY_SMS === 'true';
           const toPhone = parameters?.phone || parameters?.customer?.phone;
@@ -262,12 +283,7 @@ router.post('/', async (req, res) => {
           console.warn('audit insert failed:', auditErr.message);
         }
 
-        const say = `Booked for ${when}. Confirmation ${confId}. Anything else I can help with?`;
-        response = {
-          response: say,
-          data: { confirmation: { id: confId, startISO: confirmedStart, endISO } },
-          requestId
-        };
+        response = { ok: true, data: { bookingId: confId, startISO: confirmedStart, endISO }, requestId };
         break;
       }
 
