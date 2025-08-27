@@ -234,6 +234,34 @@ router.post('/', async (req, res) => {
         const when = human(confirmedStart, TENANT_TZ);
         const confId = result.confirmationId || result.id || 'pending';
 
+        // Audit booking + notifications for daily report
+        try {
+          const knex = require('../db-config');
+          await knex('bookings').insert({
+            booking_id: String(confId),
+            start_iso: confirmedStart,
+            end_iso: endISO,
+            customer_name: parameters?.customer?.name,
+            customer_email: parameters?.customer?.email,
+            customer_phone: parameters?.phone || parameters?.customer?.phone,
+          }).onConflict('booking_id').ignore();
+
+          const toPhone = parameters?.phone || parameters?.customer?.phone;
+          if (toPhone && result?.startISO) {
+            const start = DateTime.fromISO(result.startISO, { zone: 'utc' }).setZone(TENANT_TZ);
+            const t24 = start.minus({ hours: 24 }).toUTC().toISO();
+            const t2 = start.minus({ hours: 2 }).toUTC().toISO();
+            const rows = [
+              { kind: 'confirm', to_phone: toPhone, booking_id: String(confId) },
+            ];
+            if (process.env.REMINDER_24H === 'true') rows.push({ kind: 'reminder24', to_phone: toPhone, send_at: t24, booking_id: String(confId) });
+            if (process.env.REMINDER_2H === 'true') rows.push({ kind: 'reminder2', to_phone: toPhone, send_at: t2, booking_id: String(confId) });
+            await knex('notifications_audit').insert(rows);
+          }
+        } catch (auditErr) {
+          console.warn('audit insert failed:', auditErr.message);
+        }
+
         const say = `Booked for ${when}. Confirmation ${confId}. Anything else I can help with?`;
         response = {
           response: say,

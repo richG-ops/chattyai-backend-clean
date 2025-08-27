@@ -296,6 +296,14 @@ try {
   console.warn('⚠️  Failed to mount debug routes:', e.message);
 }
 
+// Admin debug routes (owner report trigger)
+try {
+  app.use('/admin', require('../routes/admin-debug'));
+  console.log('✅ Admin debug routes mounted');
+} catch (e) {
+  console.warn('⚠️  Failed to mount admin debug routes:', e.message);
+}
+
 // Simple VAPI (calendar-backed) for availability/booking
 try {
   app.use('/vapi', require('../routes/vapi-simple'));

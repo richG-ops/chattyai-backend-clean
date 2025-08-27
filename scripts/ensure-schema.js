@@ -39,6 +39,27 @@ CREATE TABLE IF NOT EXISTS followups (
   created_event_id TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- Bookings and notifications audit for reporting
+CREATE TABLE IF NOT EXISTS bookings (
+  id SERIAL PRIMARY KEY,
+  booking_id TEXT UNIQUE,
+  start_iso TEXT,
+  end_iso TEXT,
+  customer_name TEXT,
+  customer_email TEXT,
+  customer_phone TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS notifications_audit (
+  id SERIAL PRIMARY KEY,
+  kind TEXT CHECK (kind IN ('confirm','reminder24','reminder2')),
+  to_phone TEXT,
+  send_at TIMESTAMPTZ,
+  queued_at TIMESTAMPTZ DEFAULT now(),
+  booking_id TEXT
+);
 `;
 
 (async () => {
