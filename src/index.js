@@ -13,6 +13,13 @@ const Bull = require('bull');
 const Sentry = require('@sentry/node');
 const { DateTime } = require('luxon');
 
+// Print configuration early
+try {
+  require('../scripts/print-config').printConfig();
+} catch (e) {
+  console.warn('⚠️  Configuration print failed:', e.message);
+}
+
 // Elite modules
 const notificationService = require('../lib/notification-service');
 const callDataStorage = require('../lib/call-data-storage');
@@ -28,7 +35,8 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'development-secret-change-in-production';
 const DATABASE_URL = process.env.DATABASE_URL;
-const REDIS_URL = process.env.REDIS_URL;
+const { getRedisUrl } = require('../lib/redis');
+const REDIS_URL = getRedisUrl(['QUEUE_REDIS_URL', 'BULL_REDIS_URL']);
 const VAPI_WEBHOOK_SECRET = process.env.VAPI_WEBHOOK_SECRET;
 
 // Initialize Sentry for production monitoring
@@ -55,7 +63,15 @@ const redis = REDIS_URL ? new Redis(REDIS_URL) : null;
 const notificationQueue = redis ? new Bull('notifications', REDIS_URL) : null;
 
 // Middleware
+// Sentry
 app.use(Sentry.Handlers.requestHandler());
+// Pino HTTP logging (optional)
+try {
+  const { buildLogger } = require('../lib/logging');
+  app.use(buildLogger());
+} catch (e) {
+  console.warn('Logging middleware not available:', e.message);
+}
 app.use(helmet()); // Security headers
 app.use(cors({
   origin: process.env.ALLOWED_ORIGINS?.split(',') || '*',
@@ -245,8 +261,48 @@ app.post('/book-appointment', authenticateJWT, async (req, res) => {
 
 // Unified VAPI webhook endpoint - Ultimate version
 app.post('/webhook', vapiWebhookUltimate);
-app.post('/vapi', vapiWebhookUltimate); // Legacy support
 app.post('/api/v1/webhook', vapiWebhookUltimate); // New standard
+
+// Twilio recording callback + followups
+try {
+  app.use('/twilio', require('../routes/twilio-recording'));
+  app.use('/followups', require('../routes/followups'));
+  console.log('✅ Twilio + followups routes mounted');
+} catch (e) {
+  console.warn('⚠️  Failed to mount Twilio/Followups routes:', e.message);
+}
+
+// Public frontend API
+try {
+  app.use('/api', require('../routes/public'));
+  console.log('✅ Public API routes mounted');
+} catch (e) {
+  console.warn('⚠️  Failed to mount public API routes:', e.message);
+}
+
+// Dev-only utilities
+try {
+  app.use('/dev', require('../routes/dev'));
+  console.log('✅ Dev routes mounted');
+} catch (e) {
+  console.warn('⚠️  Failed to mount dev routes:', e.message);
+}
+
+// Debug routes (when DEBUG_API_KEY is set)
+try {
+  app.use('/debug', require('../routes/debug-calendar'));
+  console.log('✅ Debug routes mounted');
+} catch (e) {
+  console.warn('⚠️  Failed to mount debug routes:', e.message);
+}
+
+// Simple VAPI (calendar-backed) for availability/booking
+try {
+  app.use('/vapi', require('../routes/vapi-simple'));
+  console.log('✅ VAPI simple routes mounted');
+} catch (e) {
+  console.warn('⚠️  Failed to mount VAPI simple routes:', e.message);
+}
 
 // HubSpot webhook (GET for verification, POST for events)
 app.use('/api/v1/hubspot/webhook', hubspotWebhook);     // ← NEW
@@ -430,6 +486,12 @@ process.on('SIGINT', gracefulShutdown);
 
 // Start server
 const server = app.listen(PORT, () => {
+  try {
+    const prov = require('../lib/calendarClient').providerName;
+    console.info(`[boot] calendar.provider=${prov}`);
+  } catch (e) {
+    console.warn('[boot] calendar.provider log failed:', e.message);
+  }
   console.log(`🚀 TheChattyAI Elite Backend running on port ${PORT}`);
   console.log(`📊 Environment: ${NODE_ENV}`);
   console.log(`🔐 JWT Auth: ${JWT_SECRET ? 'Configured' : 'Using default (UNSAFE)'}`);

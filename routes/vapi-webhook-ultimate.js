@@ -10,7 +10,7 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
-const { v4: uuidv4 } = require('uuid');
+const { newId } = require('../lib/id');
 const { DateTime } = require('luxon');
 
 // Database connection
@@ -34,35 +34,13 @@ try {
       create: async (opts) => {
         console.log(`📱 [MOCK SMS] To: ${opts.to}`);
         console.log(`📱 [MOCK SMS] Message: ${opts.body}`);
-        return { sid: 'mock_' + uuidv4(), status: 'mock' };
+        return { sid: 'mock_' + newId(), status: 'mock' };
       }
     }
   };
 }
 
-// Initialize SendGrid
-try {
-  if (process.env.SENDGRID_API_KEY) {
-    sgMail = require('@sendgrid/mail');
-    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-    console.log('✅ SendGrid initialized successfully');
-  } else {
-    throw new Error('Missing SendGrid API key');
-  }
-} catch (error) {
-  console.warn('⚠️  SendGrid initialization failed - Email will be mocked:', error.message);
-  sgMail = {
-    send: async (messages) => {
-      const msgs = Array.isArray(messages) ? messages : [messages];
-      msgs.forEach(msg => {
-        console.log(`📧 [MOCK EMAIL] To: ${msg.to}`);
-        console.log(`📧 [MOCK EMAIL] Subject: ${msg.subject}`);
-        console.log(`📧 [MOCK EMAIL] Text: ${msg.text}`);
-      });
-      return [{ statusCode: 202, headers: {} }];
-    }
-  };
-}
+const { sendEmail, emailEnabled } = require('../lib/email');
 
 // ============================================================================
 // MIDDLEWARE
@@ -310,7 +288,7 @@ async function sendDualNotifications(bookingInfo, callData) {
   // Customer Email
   if (bookingInfo.customerEmail) {
     try {
-      await sgMail.send({
+      await sendEmail({
         to: bookingInfo.customerEmail,
         from: 'noreply@chattyai.com',
         subject: bookingInfo.appointmentDate ? 'Appointment Confirmation' : 'Thank you for calling',
@@ -339,7 +317,7 @@ async function sendDualNotifications(bookingInfo, callData) {
   // Owner Email
   if (ownerEmail) {
     try {
-      await sgMail.send({
+      await sendEmail({
         to: ownerEmail,
         from: 'alerts@chattyai.com',
         subject: bookingInfo.appointmentDate ? '🔔 New Booking Alert' : '🔔 New Call Alert',
@@ -511,7 +489,7 @@ async function handleFunctionCall(body, tenantId) {
       // Store booking
       const db = getDb();
       const booking = await db('bookings').insert({
-        booking_id: uuidv4(),
+        booking_id: newId(),
         tenant_id: tenantId,
         customer_name: bookingInfo.customerName,
         customer_phone: bookingInfo.customerPhone,
@@ -552,7 +530,7 @@ async function handleFunctionCall(body, tenantId) {
 async function processCallEnd(body, tenantId) {
   const db = getDb();
   const call = body.call || {};
-  const callId = call.id || uuidv4();
+  const callId = call.id || newId();
 
   // Calculate duration
   let duration = 0;
