@@ -85,7 +85,10 @@ async function testDatabaseConnection() {
     throw new Error('DATABASE_URL not set');
   }
   
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const pool = new Pool({ 
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  });
   
   try {
     // Test basic query

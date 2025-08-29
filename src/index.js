@@ -43,6 +43,7 @@ if (process.env.SENTRY_DSN) {
 // Database connection with connection pooling
 const db = new Pool({
   connectionString: DATABASE_URL,
+  ssl: NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
   max: 20, // Maximum connections
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
@@ -132,6 +133,27 @@ app.get('/healthz', async (req, res) => {
 
   const allHealthy = Object.values(checks).every(v => v === 'healthy' || v === 'unknown');
   res.status(allHealthy ? 200 : 503).json(checks);
+});
+
+// Dev SMS test endpoint (protected)
+app.post('/dev/sms', async (req, res) => {
+  try {
+    const key = req.get('x-debug-key');
+    if (!key || key !== process.env.DEBUG_API_KEY) {
+      return res.status(403).json({ ok: false, error: 'forbidden' });
+    }
+
+    const { to, body, template, data, provider } = req.body || {};
+    if (!to) return res.status(400).json({ ok: false, error: 'missing to' });
+    const prev = process.env.SMS_PROVIDER;
+    if (provider) process.env.SMS_PROVIDER = provider;
+
+    const out = await notificationService.sendSMS(to, template || 'call_received', { ...(data || {}), body, recipient: 'customer' });
+    if (provider) process.env.SMS_PROVIDER = prev;
+    return res.json({ ok: true, result: out });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: e.message });
+  }
 });
 
 // Get availability endpoint with caching
