@@ -43,6 +43,7 @@ if (process.env.SENTRY_DSN) {
 // Database connection with connection pooling
 const db = new Pool({
   connectionString: DATABASE_URL,
+  ssl: NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
   max: 20, // Maximum connections
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
