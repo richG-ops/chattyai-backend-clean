@@ -46,6 +46,15 @@ services:
         sync: false
       - key: TWILIO_FROM_NUMBER
         sync: false
+      # NotificationAPI primary provider
+      - key: NOTIFICATIONAPI_APP_ID
+        sync: false
+      - key: NOTIFICATIONAPI_SECRET
+        sync: false
+      - key: NOTIFICATIONAPI_SMS_TYPE
+        value: "chattyai_"
+      - key: SMS_PROVIDER
+        value: "notificationapi,twilio"
       - key: GROK_API_KEY
         sync: false
       - key: HUBSPOT_API_KEY
