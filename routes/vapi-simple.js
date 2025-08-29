@@ -8,6 +8,33 @@ const { setUpstreamStatus } = require('../lib/logging');
 const { enqueueNow, enqueueAt } = (() => { try { return require('../lib/queues/notifications'); } catch (_) { return {}; } })();
 
 const TENANT_TZ = process.env.TENANT_TZ || 'America/Los_Angeles';
+ 
+// Normalize requested availability window to safe bounds
+function normalizeAvailabilityWindow(params) {
+  const MS_DAY = 24 * 60 * 60 * 1000;
+  const now = new Date();
+  const clampInt = (n, min, max) => Math.max(min, Math.min(max, n));
+
+  let from = params?.fromISO ? new Date(params.fromISO) : now;
+  if (isNaN(from.getTime()) || from < now) from = now;
+
+  // days override (1..60)
+  let days = Number.isFinite(+params?.days) ? clampInt(+params.days, 1, 60) : 30;
+
+  let to;
+  if (params?.toISO) {
+    const t = new Date(params.toISO);
+    to = isNaN(t.getTime()) || t <= from ? new Date(from.getTime() + days * MS_DAY) : t;
+  } else {
+    to = new Date(from.getTime() + days * MS_DAY);
+  }
+
+  // hard cap 60 days
+  const maxTo = new Date(from.getTime() + 60 * MS_DAY);
+  if (to > maxTo) to = maxTo;
+
+  return { fromISO: from.toISOString(), toISO: to.toISOString(), days };
+}
   
 // Add Twilio for SMS functionality
 const twilio = require('twilio');
@@ -60,8 +87,8 @@ router.post('/', async (req, res) => {
     
     switch (functionName) {
       case 'checkAvailability': {
-        const fromISO = (parameters && parameters.fromISO) || DateTime.utc().toISO();
-        const toISO = (parameters && parameters.toISO) || DateTime.utc().plus({ days: 7 }).toISO();
+        const { fromISO, toISO, days } = normalizeAvailabilityWindow(parameters || {});
+        try { req.log?.info({ fromISO, toISO, days }, 'vapi.effectiveAvailabilityWindow'); } catch (_) {}
 
         let slots = [];
         try {
@@ -134,10 +161,27 @@ router.post('/', async (req, res) => {
         const durationM = Number((parameters && parameters.durationM) || 30);
 
         const startISO = (parameters && (parameters.startISO || parameters.startTime || parameters.desiredTime));
+        // Guard: start must be in the future (>= now + 1 min)
         if (!startISO) {
           response = {
-            response: 'What time should I book it for?',
-            data: { ok: false, reason: 'missing_start' },
+            ok: false,
+            error: 'missing_start',
+            requestId
+          };
+          break;
+        }
+        {
+          const start = new Date(startISO);
+          const minFuture = new Date(Date.now() + 60 * 1000);
+          if (isNaN(start.getTime()) || start < minFuture) {
+            try { req.log?.warn({ startISO }, 'vapi.rejectPastBooking'); } catch (_) {}
+            return res.status(400).json({ ok: false, error: 'startISO must be in the future', requestId });
+          }
+        }
+        if (!startISO) {
+          response = {
+            ok: false,
+            error: 'missing_start',
             requestId
           };
           break;
