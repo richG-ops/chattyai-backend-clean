@@ -45,10 +45,8 @@ app.get('/api/health/db', async (req, res) => {
 // Redis cache health check
 app.get('/api/health/cache', async (req, res) => {
     try {
-        const redis = require('redis');
-        const redisClient = redis.createClient({
-            url: process.env.REDIS_URL
-        });
+        const { newRedisClient } = require('./lib/redis');
+        const redisClient = newRedisClient();
         
         await redisClient.connect();
         await redisClient.ping();

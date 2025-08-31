@@ -1,6 +1,41 @@
 const express = require('express');
 const router = express.Router();
 
+const { getAvailability, bookAppointment } = require('../lib/calendarClient');
+const { DateTime } = require('luxon');
+const { human, addMinutes } = require('../lib/time');
+const { setUpstreamStatus } = require('../lib/logging');
+const { enqueueNow, enqueueAt } = (() => { try { return require('../lib/queues/notifications'); } catch (_) { return {}; } })();
+
+const TENANT_TZ = process.env.TENANT_TZ || 'America/Los_Angeles';
+ 
+// Normalize requested availability window to safe bounds
+function normalizeAvailabilityWindow(params) {
+  const MS_DAY = 24 * 60 * 60 * 1000;
+  const now = new Date();
+  const clampInt = (n, min, max) => Math.max(min, Math.min(max, n));
+
+  let from = params?.fromISO ? new Date(params.fromISO) : now;
+  if (isNaN(from.getTime()) || from < now) from = now;
+
+  // days override (1..60)
+  let days = Number.isFinite(+params?.days) ? clampInt(+params.days, 1, 60) : 30;
+
+  let to;
+  if (params?.toISO) {
+    const t = new Date(params.toISO);
+    to = isNaN(t.getTime()) || t <= from ? new Date(from.getTime() + days * MS_DAY) : t;
+  } else {
+    to = new Date(from.getTime() + days * MS_DAY);
+  }
+
+  // hard cap 60 days
+  const maxTo = new Date(from.getTime() + 60 * MS_DAY);
+  if (to > maxTo) to = maxTo;
+
+  return { fromISO: from.toISOString(), toISO: to.toISOString(), days };
+}
+  
 // Add Twilio for SMS functionality
 const twilio = require('twilio');
 const twilioClient = twilio(
@@ -36,59 +71,265 @@ async function sendSMS(to, message) {
 // Simple VAPI endpoint for voice AI integration
 // No authentication required for basic functionality
 router.post('/', async (req, res) => {
+  const requestId = req.headers['x-vapi-request-id'] || `vapi-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  
   try {
     const { function: functionName, parameters } = req.body;
     
     console.log('🎙️ VAPI Simple called:', { 
       functionName, 
       parameters,
+      requestId,
       timestamp: new Date().toISOString()
     });
     
     let response;
     
     switch (functionName) {
-      case 'checkAvailability':
-        // Return mock availability for demo
-        response = {
-          response: "I have availability tomorrow at 10 AM, 2 PM, and 4 PM. Which time works best for you?",
-          slots: [
-            { time: '10:00 AM', date: 'tomorrow' },
-            { time: '2:00 PM', date: 'tomorrow' },
-            { time: '4:00 PM', date: 'tomorrow' }
-          ]
-        };
-        break;
-        
-      case 'bookAppointment':
-        const { customerName, customerPhone, customerEmail, date, time } = parameters || {};
-        
-        // Log booking attempt
-        console.log('📅 Booking appointment:', {
-          customerName,
-          customerPhone,
-          customerEmail,
-          date,
-          time
-        });
-        
-        // TODO: Add actual booking logic here
-        // For now, return success response
-        response = {
-          response: `Perfect${customerName ? ` ${customerName}` : ''}! I've booked your appointment for ${date || 'tomorrow'} at ${time || '10 AM'}. You'll receive a confirmation shortly.`,
-          success: true,
-          booking: {
-            confirmationNumber: `CNF-${Date.now()}`,
-            customer: customerName || 'Customer',
-            date: date || 'tomorrow',
-            time: time || '10 AM',
-            email: customerEmail,
-            phone: customerPhone
+      case 'checkAvailability': {
+        const { fromISO, toISO, days } = normalizeAvailabilityWindow(parameters || {});
+        try { req.log?.info({ fromISO, toISO, days }, 'vapi.effectiveAvailabilityWindow'); } catch (_) {}
+
+        let slots = [];
+        try {
+          const avail = await getAvailability({ from: fromISO, to: toISO });
+          const raw = Array.isArray(avail) ? avail : (avail.slots || []);
+          slots = raw.slice(0, 6).map((s) => {
+            const startISO = s.startISO || s.start || s.startTime;
+            const endISO   = s.endISO   || s.end   || s.endTime;
+            return {
+              startISO, endISO,
+              startLocal: human(startISO, TENANT_TZ),
+              endLocal: human(endISO, TENANT_TZ),
+            };
+          });
+        } catch (err) {
+          console.error('getAvailability error', err?.message || err);
+          if (err?.code === 'CONFIG') {
+            setUpstreamStatus(res, 'CONFIG_ERROR', 'calendar_availability');
+            return res.status(200).json({
+              response: 'I couldn\'t reach the scheduling system yet. Let me take your preferred time and we\'ll confirm by text.',
+              data: { ok: false, reason: 'calendar_not_configured' },
+              requestId
+            });
           }
-        };
-        
-        // TODO: Trigger SMS/Email notifications here
+          if (err?.code === 'UPSTREAM_CALENDAR_401') {
+            setUpstreamStatus(res, 'UPSTREAM_401', 'calendar_availability');
+            return res.status(200).json({
+              response: 'Calendar authentication failed. Let me take your preferred time and we\'ll confirm by text.',
+              data: { ok: false, reason: 'calendar_auth_failed' },
+              requestId
+            });
+          }
+          if (err?.code === 'UPSTREAM_CALENDAR_404') {
+            setUpstreamStatus(res, 'UPSTREAM_404', 'calendar_availability');
+            return res.status(200).json({
+              response: 'Calendar service not found. Let me take your preferred time and we\'ll confirm by text.',
+              data: { ok: false, reason: 'calendar_not_found' },
+              requestId
+            });
+          }
+          if (err?.code === 'UPSTREAM_CALENDAR_UNREACHABLE') {
+            setUpstreamStatus(res, 'UPSTREAM_UNREACHABLE', 'calendar_availability');
+            return res.status(200).json({
+              response: 'Calendar service is unreachable. Let me take your preferred time and we\'ll confirm by text.',
+              data: { ok: false, reason: 'calendar_unreachable' },
+              requestId
+            });
+          }
+          if (err?.code === 'UPSTREAM_CALENDAR_UNKNOWN') {
+            setUpstreamStatus(res, 'UPSTREAM_UNKNOWN', 'calendar_availability');
+            return res.status(200).json({
+              response: 'Calendar service error. Let me take your preferred time and we\'ll confirm by text.',
+              data: { ok: false, reason: 'calendar_error' },
+              requestId
+            });
+          }
+          setUpstreamStatus(res, 'INTERNAL_ERROR', 'calendar_availability');
+          return res.status(200).json({
+            response: 'Something went wrong on my end. Want to try another time?',
+            data: { ok: false, error: 'internal' },
+            requestId
+          });
+        }
+
+        response = { ok: true, data: { slots }, requestId };
         break;
+      }
+        
+      case 'bookAppointment': {
+        const durationM = Number((parameters && parameters.durationM) || 30);
+
+        const startISO = (parameters && (parameters.startISO || parameters.startTime || parameters.desiredTime));
+        // Guard: start must be in the future (>= now + 1 min)
+        if (!startISO) {
+          response = {
+            ok: false,
+            error: 'missing_start',
+            requestId
+          };
+          break;
+        }
+        {
+          const start = new Date(startISO);
+          const minFuture = new Date(Date.now() + 60 * 1000);
+          if (isNaN(start.getTime()) || start < minFuture) {
+            try { req.log?.warn({ startISO }, 'vapi.rejectPastBooking'); } catch (_) {}
+            return res.status(400).json({ ok: false, error: 'startISO must be in the future', requestId });
+          }
+        }
+        if (!startISO) {
+          response = {
+            ok: false,
+            error: 'missing_start',
+            requestId
+          };
+          break;
+        }
+        const endISO = (parameters && (parameters.endISO || parameters.endTime)) || addMinutes(startISO, durationM);
+        const title = (parameters && parameters.title) || `Appointment with ${parameters?.customer?.name || 'customer'}`;
+
+        const payload = {
+          startISO, endISO, title,
+          description: (parameters && parameters.notes) || '',
+          customer: {
+            name:  parameters?.customer?.name  || undefined,
+            phone: parameters?.customer?.phone || undefined,
+            email: parameters?.customer?.email || undefined,
+          },
+          metadata: (parameters && parameters.metadata) || {},
+        };
+
+        let result = {};
+        try {
+          // Idempotency via X-Idempotency-Key if provided
+          const idemKey = req.headers['x-idempotency-key'];
+          const redisUrl = process.env.REDIS_URL || process.env.QUEUE_REDIS_URL || process.env.BULL_REDIS_URL;
+          if (idemKey && redisUrl) {
+            try {
+              const { createClient } = require('redis');
+              const rc = createClient({ url: redisUrl });
+              await rc.connect();
+              const cached = await rc.get(`idem:${idemKey}`);
+              if (cached) {
+                const parsed = JSON.parse(cached);
+                await rc.disconnect();
+                response = { ok: true, data: parsed, requestId };
+                break;
+              }
+              result = await bookAppointment(payload);
+              const store = { bookingId: result.confirmationId || result.id, startISO: result.startISO, endISO: result.endISO };
+              await rc.setEx(`idem:${idemKey}`, 3600, JSON.stringify(store));
+              await rc.disconnect();
+            } catch (rErr) {
+              console.warn('idempotency unavailable:', rErr.message);
+              result = await bookAppointment(payload);
+            }
+          } else {
+            result = await bookAppointment(payload);
+          }
+          // Enqueue confirmations/reminders if enabled
+          const notificationsEnabled = process.env.NOTIFY_SMS === 'true';
+          const toPhone = parameters?.phone || parameters?.customer?.phone;
+          if (notificationsEnabled && enqueueNow && toPhone && result?.startISO) {
+            const start = DateTime.fromISO(result.startISO, { zone: 'utc' }).setZone(TENANT_TZ);
+            const friendly = start.toFormat("EEE, MMM d 'at' h:mm a");
+            await enqueueNow({ to: toPhone, text: `Your appointment is confirmed for ${friendly}. Reply STOP to opt out.` });
+
+            if (process.env.REMINDER_24H === 'true') {
+              const t24 = start.minus({ hours: 24 });
+              if (t24 > DateTime.now()) await enqueueAt({ to: toPhone, text: `Reminder: your appointment is tomorrow at ${friendly}.`, sendAtISO: t24.toUTC().toISO() });
+            }
+            if (process.env.REMINDER_2H === 'true') {
+              const t2 = start.minus({ hours: 2 });
+              if (t2 > DateTime.now()) await enqueueAt({ to: toPhone, text: `Reminder: your appointment is in 2 hours (${friendly}).`, sendAtISO: t2.toUTC().toISO() });
+            }
+          }
+        } catch (err) {
+          console.error('bookAppointment error', err?.message || err);
+          if (err?.code === 'CONFIG') {
+            setUpstreamStatus(res, 'CONFIG_ERROR', 'calendar_booking');
+            return res.status(200).json({
+              response: 'I couldn\'t reach the scheduling system yet. Let me take your preferred time and we\'ll confirm by text.',
+              data: { ok: false, reason: 'calendar_not_configured' },
+              requestId
+            });
+          }
+          if (err?.code === 'UPSTREAM_CALENDAR_401') {
+            setUpstreamStatus(res, 'UPSTREAM_401', 'calendar_booking');
+            return res.status(200).json({
+              response: 'Calendar authentication failed. Let me take your preferred time and we\'ll confirm by text.',
+              data: { ok: false, reason: 'calendar_auth_failed' },
+              requestId
+            });
+          }
+          if (err?.code === 'UPSTREAM_CALENDAR_404') {
+            setUpstreamStatus(res, 'UPSTREAM_404', 'calendar_booking');
+            return res.status(200).json({
+              response: 'Calendar service not found. Let me take your preferred time and we\'ll confirm by text.',
+              data: { ok: false, reason: 'calendar_not_found' },
+              requestId
+            });
+          }
+          if (err?.code === 'UPSTREAM_CALENDAR_UNREACHABLE') {
+            setUpstreamStatus(res, 'UPSTREAM_UNREACHABLE', 'calendar_booking');
+            return res.status(200).json({
+              response: 'Calendar service is unreachable. Let me take your preferred time and we\'ll confirm by text.',
+              data: { ok: false, reason: 'calendar_unreachable' },
+              requestId
+            });
+          }
+          if (err?.code === 'UPSTREAM_CALENDAR_UNKNOWN') {
+            setUpstreamStatus(res, 'UPSTREAM_UNKNOWN', 'calendar_booking');
+            return res.status(200).json({
+              response: 'Calendar service error. Let me take your preferred time and we\'ll confirm by text.',
+              data: { ok: false, reason: 'calendar_error' },
+              requestId
+            });
+          }
+          setUpstreamStatus(res, 'INTERNAL_ERROR', 'calendar_booking');
+          return res.status(200).json({
+            response: 'Something went wrong on my end. Want to try another time?',
+            data: { ok: false, error: 'internal' },
+            requestId
+          });
+        }
+
+        const confirmedStart = result.startISO || startISO;
+        const when = human(confirmedStart, TENANT_TZ);
+        const confId = result.confirmationId || result.id || 'pending';
+
+        // Audit booking + notifications for daily report
+        try {
+          const knex = require('../db-config');
+          await knex('bookings').insert({
+            booking_id: String(confId),
+            start_iso: confirmedStart,
+            end_iso: endISO,
+            customer_name: parameters?.customer?.name,
+            customer_email: parameters?.customer?.email,
+            customer_phone: parameters?.phone || parameters?.customer?.phone,
+          }).onConflict('booking_id').ignore();
+
+          const toPhone = parameters?.phone || parameters?.customer?.phone;
+          if (toPhone && result?.startISO) {
+            const start = DateTime.fromISO(result.startISO, { zone: 'utc' }).setZone(TENANT_TZ);
+            const t24 = start.minus({ hours: 24 }).toUTC().toISO();
+            const t2 = start.minus({ hours: 2 }).toUTC().toISO();
+            const rows = [
+              { kind: 'confirm', to_phone: toPhone, booking_id: String(confId) },
+            ];
+            if (process.env.REMINDER_24H === 'true') rows.push({ kind: 'reminder24', to_phone: toPhone, send_at: t24, booking_id: String(confId) });
+            if (process.env.REMINDER_2H === 'true') rows.push({ kind: 'reminder2', to_phone: toPhone, send_at: t2, booking_id: String(confId) });
+            await knex('notifications_audit').insert(rows);
+          }
+        } catch (auditErr) {
+          console.warn('audit insert failed:', auditErr.message);
+        }
+
+        response = { ok: true, data: { bookingId: confId, startISO: confirmedStart, endISO }, requestId };
+        break;
+      }
 
       case 'sendSMS':
         const { phoneNumber, message } = parameters || {};
@@ -98,7 +339,8 @@ router.post('/', async (req, res) => {
           response = {
             response: "I need both a phone number and message to send an SMS. Please provide both.",
             success: false,
-            error: "Missing required parameters"
+            error: "Missing required parameters",
+            requestId
           };
           break;
         }
@@ -106,7 +348,8 @@ router.post('/', async (req, res) => {
         // Log SMS attempt
         console.log('📱 Sending SMS:', {
           phoneNumber,
-          message: message.substring(0, 50) + (message.length > 50 ? '...' : '')
+          message: message.substring(0, 50) + (message.length > 50 ? '...' : ''),
+          requestId
         });
         
         // Send the SMS
@@ -117,13 +360,15 @@ router.post('/', async (req, res) => {
             response: `SMS sent successfully to ${phoneNumber}! ${smsResult.simulated ? '(This was a simulation since Twilio is not configured)' : ''}`,
             success: true,
             messageId: smsResult.messageId,
-            simulated: smsResult.simulated || false
+            simulated: smsResult.simulated || false,
+            requestId
           };
         } else {
           response = {
             response: `I'm sorry, I couldn't send the SMS to ${phoneNumber}. ${smsResult.error || 'Please check the phone number and try again.'}`,
             success: false,
-            error: smsResult.error
+            error: smsResult.error,
+            requestId
           };
         }
         break;
@@ -139,14 +384,16 @@ router.post('/', async (req, res) => {
             friday: '9:00 AM - 5:00 PM',
             saturday: '10:00 AM - 2:00 PM',
             sunday: 'Closed'
-          }
+          },
+          requestId
         };
         break;
         
       default:
         response = {
           response: "Hello! I'm your AI assistant. I can help you check availability, book appointments, send SMS messages, or answer questions about our business hours. What would you like to do?",
-          capabilities: ['checkAvailability', 'bookAppointment', 'sendSMS', 'getBusinessHours']
+          capabilities: ['checkAvailability', 'bookAppointment', 'sendSMS', 'getBusinessHours'],
+          requestId
         };
     }
     
@@ -159,7 +406,8 @@ router.post('/', async (req, res) => {
     // Return graceful error for voice AI
     res.status(200).json({
       response: "I'm having a brief technical issue. Please try again in a moment.",
-      error: false // Don't expose errors to voice AI
+      error: false, // Don't expose errors to voice AI
+      requestId
     });
   }
 });

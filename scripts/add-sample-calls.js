@@ -1,5 +1,5 @@
 const { getDb } = require('../db-config');
-const { v4: uuidv4 } = require('uuid');
+const { newId } = require('../lib/id');
 
 async function addSampleCalls() {
   const db = getDb();
@@ -8,7 +8,7 @@ async function addSampleCalls() {
   
   const sampleCalls = [
     {
-      call_id: uuidv4(),
+      call_id: newId(),
       tenant_id: tenantId,
       phone_number: '+15551234567',
       started_at: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
@@ -32,7 +32,7 @@ async function addSampleCalls() {
       updated_at: new Date()
     },
     {
-      call_id: uuidv4(),
+      call_id: newId(),
       tenant_id: tenantId,
       phone_number: '+15559876543',
       started_at: new Date(Date.now() - 4 * 60 * 60 * 1000), // 4 hours ago
@@ -53,7 +53,7 @@ async function addSampleCalls() {
       updated_at: new Date()
     },
     {
-      call_id: uuidv4(),
+      call_id: newId(),
       tenant_id: tenantId,
       phone_number: '+15555551234',
       started_at: new Date(Date.now() - 1 * 60 * 60 * 1000), // 1 hour ago

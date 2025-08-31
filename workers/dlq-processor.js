@@ -12,7 +12,8 @@ if (process.env.SENTRY_DSN) {
 }
 
 // Redis connection
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+const { getRedisUrl } = require('../lib/redis');
+const redis = new Redis(getRedisUrl(['BULL_REDIS_URL', 'QUEUE_REDIS_URL']) || 'redis://localhost:6379');
 
 // Dead Letter Queue processor
 const dlqProcessor = async (job) => {
@@ -66,7 +67,7 @@ const dlqProcessor = async (job) => {
     
     try {
       // Re-queue to original queue with delay
-      const originalQueue = new Bull(data.originalQueue, process.env.REDIS_URL);
+      const originalQueue = new Bull(data.originalQueue, getRedisUrl(['BULL_REDIS_URL', 'QUEUE_REDIS_URL']));
       await originalQueue.add(data.originalJob, data.data, {
         delay: calculateRetryDelay(data.attempts),
         attempts: 1, // Only try once more
@@ -138,7 +139,7 @@ const calculateRetryDelay = (attempts) => {
 };
 
 // Create Bull worker
-const dlqWorker = new Bull('dead-letter-queue', process.env.REDIS_URL);
+const dlqWorker = new Bull('dead-letter-queue', getRedisUrl(['BULL_REDIS_URL', 'QUEUE_REDIS_URL']));
 
 // Process jobs
 dlqWorker.process(5, dlqProcessor); // Process up to 5 jobs concurrently

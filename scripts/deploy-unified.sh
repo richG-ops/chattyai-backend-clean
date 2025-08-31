@@ -365,15 +365,16 @@ if [[ "$DRY_RUN" == "false" && "$CRITICAL_ALERTS_ENABLED" == "true" ]]; then
   
   # Email notification
   node -e "
-  const sgMail = require('@sendgrid/mail');
-  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-  sgMail.send({
-    to: process.env.OWNER_EMAIL,
-    from: 'deployments@chattyai.com',
-    subject: '✅ Deployment Success',
-    text: 'Deployment ${DEPLOYMENT_ID} completed successfully',
-    html: '<h2>Deployment Complete</h2><p>Your ChattyAI system has been updated.</p>'
-  }).catch(console.error);
+  try {
+    const { sendEmail } = require('../lib/email');
+    sendEmail({
+      to: process.env.OWNER_EMAIL,
+      from: 'deployments@chattyai.com',
+      subject: '✅ Deployment Success',
+      text: 'Deployment ${DEPLOYMENT_ID} completed successfully',
+      html: '<h2>Deployment Complete</h2><p>Your ChattyAI system has been updated.</p>'
+    }).catch(()=>{});
+  } catch(e) { /* optional email */ }
   " 2>/dev/null || log "${YELLOW}⚠️  Email notification failed${NC}"
 fi
 

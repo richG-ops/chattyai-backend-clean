@@ -8,6 +8,7 @@
     "start": "node src/index.js",
     "test": "jest --coverage",
     "prestart": "npm run smoke-test",
+    "ensure:schema": "node scripts/ensure-schema.js",
     "start:legacy": "node google-calendar-api.js",
     "dev": "nodemon src/index.js",
     "test:watch": "mocha tests/**/*.test.js --watch",
@@ -16,6 +17,9 @@
     "migrate:rollback": "knex migrate:rollback",
     "migrate:status": "knex migrate:status",
     "smoke-test": "node tests/smoke-test.js",
+    "smoke:staging": "node scripts/smoke-staging.js",
+    "mint:jwt": "node scripts/mint-tenant-jwt.js",
+    "mint:jwt:manual": "node scripts/mint-jwt-manual.js",
     "deploy": "git push origin main",
     "tenants:print": "node scripts/print-tenants.js",
     "mint:jwt": "node scripts/mint-tenant-jwt.js"
@@ -54,10 +58,10 @@
     "zod": "^4.0.5"
   },
   "devDependencies": {
+    "@types/jest": "^29.5.0",
     "concurrently": "^8.2.2",
-    "nodemon": "^3.0.1",
     "jest": "^29.7.0",
-    "@types/jest": "^29.5.0"
+    "nodemon": "^3.0.1"
   },
   "keywords": [
     "google-calendar",
