@@ -12,6 +12,7 @@ const Redis = require('ioredis');
 const Bull = require('bull');
 const Sentry = require('@sentry/node');
 const { DateTime } = require('luxon');
+const axios = require('axios');
 
 // Elite modules
 const notificationService = require('../lib/notification-service');
@@ -91,6 +92,16 @@ const authenticateJWT = (req, res, next) => {
     next();
   });
 };
+
+// Version endpoint (build identity)
+app.get('/version', (_req, res) => {
+  res.status(200).json({
+    branch: process.env.GIT_BRANCH || 'main',
+    commit: process.env.GIT_COMMIT || 'unknown',
+    buildTime: process.env.BUILD_TIME || 'unknown',
+    env: NODE_ENV
+  });
+});
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -273,6 +284,43 @@ app.post('/api/v1/webhook', vapiWebhookUltimate); // New standard
 // HubSpot webhook (GET for verification, POST for events)
 app.use('/api/v1/hubspot/webhook', hubspotWebhook);     // ← NEW
 
+// Notification status webhooks (optional; idempotent inserts ok)
+app.post('/webhooks/twilio-status', bodyParser.urlencoded({ extended: false }), async (req, res) => {
+  try {
+    const { MessageSid, MessageStatus, ErrorCode, ErrorMessage, To } = req.body || {};
+    if (MessageSid && To) {
+      await db.query(
+        `insert into notification_logs(provider, channel, to_e164, provider_message_id, status, error_code, error_message)
+         values($1,$2,$3,$4,$5,$6,$7)`,
+        ['twilio', 'sms', To, MessageSid, MessageStatus || 'unknown', String(ErrorCode || ''), String(ErrorMessage || '')]
+      );
+    }
+    return res.send('ok');
+  } catch (e) {
+    console.error('Twilio status webhook error:', e.message);
+    return res.status(500).send('error');
+  }
+});
+
+app.post('/webhooks/notificationapi-status', bodyParser.json(), async (req, res) => {
+  try {
+    const ev = req.body || {};
+    const toNumber = ev?.to?.number || ev?.to || '';
+    const pid = ev?.id || ev?.requestId || '';
+    if (toNumber && pid) {
+      await db.query(
+        `insert into notification_logs(provider, channel, to_e164, provider_message_id, status, error_code, error_message)
+         values($1,$2,$3,$4,$5,$6,$7)`,
+        ['notificationapi', 'sms', toNumber, pid, ev.status || 'unknown', '', '']
+      );
+    }
+    return res.send('ok');
+  } catch (e) {
+    console.error('NotificationAPI status webhook error:', e.message);
+    return res.status(500).send('error');
+  }
+});
+
 // Dashboard API endpoints
 // Add route for /api/calls with pagination
 app.get('/api/calls', authenticateJWT, async (req, res) => {
@@ -450,14 +498,57 @@ const gracefulShutdown = async () => {
 process.on('SIGTERM', gracefulShutdown);
 process.on('SIGINT', gracefulShutdown);
 
-// Start server
-const server = app.listen(PORT, () => {
-  console.log(`🚀 TheChattyAI Elite Backend running on port ${PORT}`);
-  console.log(`📊 Environment: ${NODE_ENV}`);
-  console.log(`🔐 JWT Auth: ${JWT_SECRET ? 'Configured' : 'Using default (UNSAFE)'}`);
-  console.log(`🗄️  Database: ${DATABASE_URL ? 'Connected' : 'Not configured'}`);
-  console.log(`⚡ Redis: ${REDIS_URL ? 'Connected' : 'Not configured'}`);
-  console.log(`🔍 Monitoring: ${process.env.SENTRY_DSN ? 'Sentry enabled' : 'Disabled'}`);
+async function preflightOrExit() {
+  try {
+    // Calendar mode validation
+    const provider = (process.env.CALENDAR_PROVIDER || '').trim().toLowerCase();
+    if (provider === 'calcom') {
+      const required = ['CAL_API_BASE', 'CAL_API_KEY', 'CAL_EVENT_TYPE_ID'];
+      required.forEach((k) => {
+        if (!process.env[k]) throw new Error(`Missing ${k}`);
+      });
+      const base = process.env.CAL_API_BASE || 'https://api.cal.com';
+      const eventId = process.env.CAL_EVENT_TYPE_ID;
+      const now = new Date();
+      const end = new Date(now.getTime() + 60 * 60 * 1000);
+      const url = `${base}/v2/slots?eventTypeId=${encodeURIComponent(eventId)}&start=${encodeURIComponent(
+        now.toISOString()
+      )}&end=${encodeURIComponent(end.toISOString())}`;
+      const resp = await axios.get(url, {
+        headers: { Authorization: `Bearer ${process.env.CAL_API_KEY}` },
+        timeout: 8000
+      });
+      if (resp.status !== 200) throw new Error(`Cal.com probe status ${resp.status}`);
+      console.log('✅ Preflight: Cal.com slots reachable');
+    } else {
+      if (!process.env.CALENDAR_API_URL) {
+        console.log('ℹ️ CALENDAR_PROVIDER legacy: CALENDAR_API_URL not set');
+      } else {
+        console.log(`ℹ️ Legacy calendar mode → ${process.env.CALENDAR_API_URL}`);
+      }
+    }
+
+    // NotificationAPI env presence (non-fatal)
+    if (process.env.NOTIFICATIONAPI_APP_ID && process.env.NOTIFICATIONAPI_SECRET) {
+      console.log('✅ Preflight: NotificationAPI configured');
+    } else {
+      console.log('⚠️ Preflight: NotificationAPI env missing (will fallback to Twilio if configured)');
+    }
+  } catch (e) {
+    console.error('❌ Preflight failed:', e.message);
+    process.exit(1);
+  }
+}
+
+preflightOrExit().then(() => {
+  const server = app.listen(PORT, () => {
+    console.log(`🚀 TheChattyAI Elite Backend running on port ${PORT}`);
+    console.log(`📊 Environment: ${NODE_ENV}`);
+    console.log(`🔐 JWT Auth: ${JWT_SECRET ? 'Configured' : 'Using default (UNSAFE)'}`);
+    console.log(`🗄️  Database: ${DATABASE_URL ? 'Connected' : 'Not configured'}`);
+    console.log(`⚡ Redis: ${REDIS_URL ? 'Connected' : 'Not configured'}`);
+    console.log(`🔍 Monitoring: ${process.env.SENTRY_DSN ? 'Sentry enabled' : 'Disabled'}`);
+  });
 });
 
 module.exports = app;
