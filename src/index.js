@@ -13,6 +13,14 @@ const Bull = require('bull');
 const Sentry = require('@sentry/node');
 const { DateTime } = require('luxon');
 const axios = require('axios');
+const calendarClient = require('../lib/calendarClient');
+const calcom = (() => {
+  try {
+    return require('./calendar/providers/calcom');
+  } catch (_e) {
+    return null;
+  }
+})();
 
 // Print configuration early
 try {
@@ -562,34 +570,36 @@ const gracefulShutdown = async () => {
 process.on('SIGTERM', gracefulShutdown);
 process.on('SIGINT', gracefulShutdown);
 
+let server;
+
 async function preflightOrExit() {
+  // Calendar mode validation with graceful fallback
+  const provider = (process.env.CALENDAR_PROVIDER || 'legacy').trim().toLowerCase();
+  const fallbackAllowed = process.env.CALENDAR_FALLBACK_ENABLED === 'true' && !!process.env.CALENDAR_API_URL;
   try {
-    // Calendar mode validation
-    const provider = (process.env.CALENDAR_PROVIDER || '').trim().toLowerCase();
     if (provider === 'calcom') {
       const required = ['CAL_API_BASE', 'CAL_API_KEY', 'CAL_EVENT_TYPE_ID'];
-      required.forEach((k) => {
-        if (!process.env[k]) throw new Error(`Missing ${k}`);
-      });
-      const base = process.env.CAL_API_BASE || 'https://api.cal.com';
-      const eventId = process.env.CAL_EVENT_TYPE_ID;
-      const now = new Date();
-      const end = new Date(now.getTime() + 60 * 60 * 1000);
-      const url = `${base}/v2/slots?eventTypeId=${encodeURIComponent(eventId)}&start=${encodeURIComponent(
-        now.toISOString()
-      )}&end=${encodeURIComponent(end.toISOString())}`;
-      const resp = await axios.get(url, {
-        headers: { Authorization: `Bearer ${process.env.CAL_API_KEY}` },
-        timeout: 8000
-      });
-      if (resp.status !== 200) throw new Error(`Cal.com probe status ${resp.status}`);
-      console.log('✅ Preflight: Cal.com slots reachable');
-    } else {
-      if (!process.env.CALENDAR_API_URL) {
-        console.log('ℹ️ CALENDAR_PROVIDER legacy: CALENDAR_API_URL not set');
-      } else {
-        console.log(`ℹ️ Legacy calendar mode → ${process.env.CALENDAR_API_URL}`);
+      required.forEach((k) => { if (!process.env[k]) throw new Error(`Missing ${k}`); });
+
+      // Prefer provider health/availability to ensure headers/versions are correct
+      try {
+        const now = new Date().toISOString();
+        const to = new Date(Date.now() + 6 * 3600 * 1000).toISOString();
+        await calendarClient.availability({ from: now, to });
+        console.log('✅ Preflight: Cal.com reachable');
+      } catch (err) {
+        console.warn('⚠️ Preflight: Cal.com failed →', err?.response?.status || err?.code || err?.message);
+        if (fallbackAllowed) {
+          console.warn('ℹ️ Preflight: Fallback enabled, proceeding with legacy as backup');
+        } else {
+          throw err;
+        }
       }
+    } else {
+      // Legacy-only path
+      const h = await calendarClient.health();
+      if (!h.ok) throw new Error(`Legacy calendar health failed: ${h.status}`);
+      console.log('✅ Preflight: Legacy calendar reachable');
     }
 
     // NotificationAPI env presence (non-fatal)
@@ -600,12 +610,17 @@ async function preflightOrExit() {
     }
   } catch (e) {
     console.error('❌ Preflight failed:', e.message);
-    process.exit(1);
+    // Only exit if no fallback allowed
+    const fallbackAllowed = process.env.CALENDAR_FALLBACK_ENABLED === 'true' && !!process.env.CALENDAR_API_URL;
+    if (!fallbackAllowed) {
+      process.exit(1);
+    }
+    console.warn('ℹ️ Proceeding to boot with legacy fallback enabled');
   }
 }
 
 preflightOrExit().then(() => {
-  const server = app.listen(PORT, () => {
+  server = app.listen(PORT, () => {
     try {
       const prov = require('../lib/calendarClient').providerName;
       console.info(`[boot] calendar.provider=${prov}`);
