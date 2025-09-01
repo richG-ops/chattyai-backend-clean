@@ -356,6 +356,15 @@ try {
 // HubSpot webhook (GET for verification, POST for events)
 app.use('/api/v1/hubspot/webhook', hubspotWebhook);     // ← NEW
 
+// Telnyx webhooks (status/inbound/failovers)
+try {
+  const telnyxHooks = require('./routes/telnyx-webhooks');
+  app.use('/webhooks', telnyxHooks);
+  console.log('✅ Telnyx webhook routes mounted');
+} catch (e) {
+  console.warn('⚠️  Failed to mount Telnyx webhooks:', e.message);
+}
+
 // Notification status webhooks (optional; idempotent inserts ok)
 app.post('/webhooks/twilio-status', bodyParser.urlencoded({ extended: false }), async (req, res) => {
   try {
