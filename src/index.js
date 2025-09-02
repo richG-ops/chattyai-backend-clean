@@ -90,6 +90,18 @@ app.use(cors({
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 
+// Return 400 on invalid JSON bodies instead of generic 500
+app.use((err, req, res, next) => {
+  if (err && err.type === 'entity.parse.failed') {
+    return res.status(400).json({
+      ok: false,
+      error: 'INVALID_JSON',
+      hint: 'Body must be valid JSON: {"to":"+1...","body":"...","provider":"telnyx"}'
+    });
+  }
+  next(err);
+});
+
 // Request logging middleware
 app.use((req, res, next) => {
   const start = Date.now();
