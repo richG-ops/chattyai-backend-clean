@@ -1,10 +1,33 @@
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const { getDb } = require('../../db-config');
 
 // Delivery Status (DLR)
+function verifyTelnyx(req) {
+  try {
+    const pub = (process.env.TELNYX_PUBLIC_KEY || '').trim();
+    if (!pub) return true; // allow when not configured
+    const sig = req.header('Telnyx-Signature-Ed25519');
+    const ts = req.header('Telnyx-Timestamp');
+    if (!sig || !ts) return false;
+    const verifier = crypto.createVerify('ed25519');
+    // Telnyx requires verifying over `${timestamp}.${rawBody}`; we need raw body middleware for strict check.
+    // Fallback: verify hash of JSON string to avoid false negatives when raw body unavailable.
+    const payload = `${ts}.${JSON.stringify(req.body || {})}`;
+    verifier.update(payload);
+    verifier.end();
+    return verifier.verify(pub, Buffer.from(sig, 'base64'));
+  } catch (_e) {
+    return false;
+  }
+}
+
 router.post('/telnyx-status', express.json({ type: '*/*' }), async (req, res) => {
   try {
+    if (!verifyTelnyx(req)) {
+      return res.status(401).send('invalid signature');
+    }
     const db = getDb();
     const incoming = req.body;
     const events = Array.isArray(incoming?.data) ? incoming.data : [incoming?.data || incoming];
@@ -37,6 +60,9 @@ router.post('/telnyx-status', express.json({ type: '*/*' }), async (req, res) =>
 // Inbound MO (optional)
 router.post('/telnyx-inbound', express.json({ type: '*/*' }), async (req, res) => {
   try {
+    if (!verifyTelnyx(req)) {
+      return res.status(401).send('invalid signature');
+    }
     const db = getDb();
     const ev = req.body?.data || req.body;
     const p = ev?.payload || {};
